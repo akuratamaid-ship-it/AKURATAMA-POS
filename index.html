@@ -3,276 +3,167 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#1e3a5f">
-<title>AKURATAMA POS v3</title>
+<meta name="theme-color" content="#0f172a">
+<title>AKURATAMA POS</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script>
 tailwind.config = {
   darkMode: 'class',
   theme: {
     extend: {
-      fontFamily: { sans: ['Inter','sans-serif'], mono: ['Space Mono','monospace'] },
+      fontFamily: { sans: ['Inter','sans-serif'] },
       colors: {
-        primary: { 50:'#f0fdfa',100:'#ccfbf1',200:'#99f6e4',300:'#5eead4',400:'#2dd4bf',500:'#14b8a6',600:'#0d9488',700:'#0f766e',800:'#115e59',900:'#134e4a' },
-        brand: { 50:'#f0f9ff',100:'#e0f2fe',200:'#bae6fd',300:'#7dd3fc',400:'#38bdf8',500:'#0ea5e9',600:'#0284c7',700:'#0369a1',800:'#075985',900:'#0c4a6e' },
-        emerald: { 50:'#ecfdf5',100:'#d1fae5',200:'#a7f3d0',300:'#6ee7b7',400:'#34d399',500:'#10b981',600:'#059669',700:'#047857',800:'#065f46',900:'#064e3b' },
-        amber: { 50:'#fffbeb',100:'#fef3c7',200:'#fde68a',300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309',800:'#92400e',900:'#78350f' },
-        rose: { 50:'#fff1f2',100:'#ffe4e6',200:'#fecdd3',300:'#fda4af',400:'#fb7185',500:'#f43f5e',600:'#e11d48',700:'#be123c',800:'#9f1239',900:'#881337' },
-        slate: { 50:'#f8fafc',100:'#f1f5f9',200:'#e2e8f0',300:'#cbd5e1',400:'#94a3b8',500:'#64748b',600:'#475569',700:'#334155',800:'#1e293b',900:'#0f172a' }
+        brand: { 50:'#f0fdfa',100:'#ccfbf1',200:'#99f6e4',300:'#5eead4',400:'#2dd4bf',500:'#14b8a6',600:'#0d9488',700:'#0f766e',800:'#115e59',900:'#134e4a' },
+        dark: { 800:'#1e293b',900:'#0f172a',950:'#020617' }
       }
     }
   }
 }
 </script>
 <style>
-* { -webkit-tap-highlight-color: transparent; }
-body { font-family: 'Inter', sans-serif; overscroll-behavior: none; }
+* { -webkit-tap-highlight-color: transparent; font-family: 'Inter', sans-serif; }
+body { overscroll-behavior: none; background: #0f172a; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-@keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
-.fade-in { animation: fadeIn 0.25s ease-out; }
+@keyframes fadeUp { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform: translateY(0); } }
+.animate-fade-up { animation: fadeUp 0.3s ease-out forwards; }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-.slide-up { animation: slideUp 0.3s ease-out; }
-@keyframes pulse-soft { 0%,100%{opacity:1} 50%{opacity:0.7} }
-.pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
-.receipt-paper {
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
-  position: relative;
-}
-.receipt-paper::before {
-  content: '';
-  position: absolute;
-  top: -8px; left: 0; right: 0;
-  height: 16px;
-  background: radial-gradient(circle, transparent 6px, #fff 6px);
-  background-size: 16px 16px;
-  background-position: -8px 0;
-}
-.receipt-paper::after {
-  content: '';
-  position: absolute;
-  bottom: -8px; left: 0; right: 0;
-  height: 16px;
-  background: radial-gradient(circle, transparent 6px, #fff 6px);
-  background-size: 16px 16px;
-  background-position: -8px 0;
-  transform: rotate(180deg);
-}
+.animate-slide-up { animation: slideUp 0.35s cubic-bezier(0.16,1,0.3,1) forwards; }
+.glass { background: rgba(30,41,59,0.75); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.card-hover { transition: all 0.2s ease; }
+.card-hover:active { transform: scale(0.97); }
+input:focus { outline: none; }
 @media print {
-  body * { visibility: hidden; }
-  #print-receipt, #print-receipt * { visibility: visible; }
-  #print-receipt { position: absolute; left: 0; top: 0; width: 100%; }
+  body * { visibility: hidden !important; }
+  #receipt-print, #receipt-print * { visibility: visible !important; }
+  #receipt-print { position: fixed; left: 0; top: 0; width: 80mm; background: white !important; color: black !important; padding: 8px; }
   .no-print { display: none !important; }
 }
-.thermal-font { font-family: 'Space Mono', monospace; }
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.receipt-editor-scroll::-webkit-scrollbar { width: 4px; }
-.receipt-editor-scroll::-webkit-scrollbar-track { background: transparent; }
-.receipt-editor-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 </style>
 </head>
-<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+<body class="bg-dark-900 text-white antialiased">
 <div id="root"></div>
 
-<!-- Tombol Scan Barcode Floating -->
-<div style="position:fixed; bottom:90px; right:16px; z-index:9999;">
-  <button onclick="startScan()" style="width:56px; height:56px; background:#00d4aa; color:white; border:none; border-radius:50%; font-size:22px; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center;">
-    📷
-  </button>
-</div>
-
-<!-- Popup Scanner -->
-<div id="scannerPopup" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:10000; flex-direction:column; align-items:center; justify-content:center;">
-  <div id="reader" style="width:300px; height:250px;"></div>
-  <button onclick="stopScan()" style="margin-top:20px; padding:12px 24px; background:#ff4444; color:white; border:none; border-radius:8px; font-size:16px;">❌ Tutup</button>
-</div>
-
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script>
-let html5QrCode = null;
-
-function startScan() {
-  document.getElementById('scannerPopup').style.display = 'flex';
-  html5QrCode = new Html5Qrcode("reader");
-  html5QrCode.start(
-    { facingMode: "environment" },
-    { fps: 10, qrbox: { width: 250, height: 250 } },
-    (decodedText) => {
-      stopScan();
-      setTimeout(() => scanToCart(decodedText), 300);
-    },
-    (error) => { /* ignore */ }
-  );
-}
-
-function stopScan() {
-  if (html5QrCode) {
-    html5QrCode.stop().then(() => {
-      html5QrCode.clear();
-      html5QrCode = null;
-    });
-  }
-  document.getElementById('scannerPopup').style.display = 'none';
-}
-
-function scanToCart(barcode) {
-  const productsKey = 'akv3:products';
-  const cartKey = 'akv3:cart';
-
-  let products = [];
-  let cart = [];
-  try { products = JSON.parse(localStorage.getItem(productsKey) || '[]'); } catch(e){}
-  try { cart = JSON.parse(localStorage.getItem(cartKey) || '[]'); } catch(e){}
-
-  if (products.length === 0) {
-    alert('Data produk kosong. Buka halaman Produk dulu untuk inisialisasi.');
-    return;
-  }
-
-  const found = products.find(p => p.barcode === barcode);
-
-  if (found) {
-    const idx = cart.findIndex(c => c.id === found.id);
-    if (idx >= 0) {
-      cart[idx].qty += 1;
-    } else {
-      cart.push({ ...found, qty: 1 });
-    }
-    localStorage.setItem(cartKey, JSON.stringify(cart));
-    alert('✅ ' + found.name + ' ditambahkan ke keranjang!\nQty: ' + (idx >= 0 ? cart[idx].qty : 1));
-    window.location.reload();
-  } else {
-    const name = prompt('📦 Barcode: ' + barcode + '\nProduk belum terdaftar.\n\nMasukkan nama produk:');
-    if (!name) return;
-
-    const price = parseInt(prompt('💰 Harga jual:') || '0');
-    if (!price || price <= 0) { alert('Harga jual wajib diisi!'); return; }
-
-    const cost = parseInt(prompt('📊 Harga modal:') || '0');
-    const stock = parseInt(prompt('📦 Stok awal:') || '0');
-
-    const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-    const newProduct = {
-      id: newId,
-      name,
-      price,
-      cost,
-      stock,
-      barcode,
-      category: 'Lainnya'
-    };
-
-    products.push(newProduct);
-    localStorage.setItem(productsKey, JSON.stringify(products));
-
-    alert('✅ ' + name + ' berhasil ditambahkan ke stok produk!');
-  }
-}
-</script>
-
 <script type="text/babel">
-const { useState, useEffect, useRef, useCallback, useMemo } = React;
+const { useState, useEffect, useMemo } = React;
 
-// ==================== UTILS ====================
-const uid = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+// ============ UTILS ============
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 const fmt = (n) => new Intl.NumberFormat('id-ID').format(Math.round(n));
-const now = () => new Date().toISOString();
-const today = () => new Date().toISOString().split('T')[0];
-const timeStr = () => new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-
+const nowTime = () => new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+const todayDate = () => new Date().toISOString().split('T')[0];
+const nowISO = () => new Date().toISOString();
 const LS = {
-  get: (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e) { return d; } },
+  get: (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e){ return d; } },
   set: (k, v) => localStorage.setItem(k, JSON.stringify(v)),
 };
 
-const STORAGE_KEYS = {
+const KEYS = {
   products: 'akv3:products',
   transactions: 'akv3:transactions',
-  receipt: 'akv3:receipt',
-  settings: 'akv3:settings',
-  darkMode: 'akv3:darkMode',
   cart: 'akv3:cart',
-  heldOrders: 'akv3:heldOrders',
+  settings: 'akv3:settings',
+  held: 'akv3:held',
+  shifts: 'akv3:shifts',
+  activeShift: 'akv3:activeShift',
 };
 
-// ==================== SAMPLE DATA ====================
+// ============ SAMPLE DATA ============
 const SAMPLE_PRODUCTS = [
-  { id: uid(), name: 'Beras Premium 5kg', price: 65000, cost: 55000, stock: 24, barcode: '8998866204514', category: 'Sembako' },
-  { id: uid(), name: 'Minyak Goreng 2L', price: 28000, cost: 24000, stock: 36, barcode: '8998866204515', category: 'Sembako' },
-  { id: uid(), name: 'Gula Pasir 1kg', price: 14500, cost: 12000, stock: 50, barcode: '8998866204516', category: 'Sembako' },
-  { id: uid(), name: 'Telur Ayam 1kg', price: 27000, cost: 23000, stock: 18, barcode: '8998866204517', category: 'Sembako' },
-  { id: uid(), name: 'Indomie Goreng', price: 3500, cost: 3000, stock: 120, barcode: '8998866204518', category: 'Makanan' },
-  { id: uid(), name: 'Kopi Kapal Api', price: 12000, cost: 10000, stock: 45, barcode: '8998866204519', category: 'Minuman' },
-  { id: uid(), name: 'Sabun Lifebuoy', price: 5500, cost: 4500, stock: 60, barcode: '8998866204520', category: 'Kebutuhan' },
-  { id: uid(), name: 'Shampoo Clear 70ml', price: 8500, cost: 7000, stock: 40, barcode: '8998866204521', category: 'Kebutuhan' },
-  { id: uid(), name: 'Tissue Paseo 250s', price: 11000, cost: 9000, stock: 30, barcode: '8998866204522', category: 'Kebutuhan' },
-  { id: uid(), name: 'Aqua 600ml', price: 4000, cost: 3200, stock: 72, barcode: '8998866204523', category: 'Minuman' },
-  { id: uid(), name: 'Chitato 68g', price: 9500, cost: 8000, stock: 28, barcode: '8998866204524', category: 'Makanan' },
-  { id: uid(), name: 'Beng-beng', price: 2500, cost: 2000, stock: 80, barcode: '8998866204525', category: 'Makanan' }
+  { id: uid(), name: 'Beras Premium 5kg', price: 65000, cost: 55000, stock: 24, category: 'Sembako' },
+  { id: uid(), name: 'Minyak Goreng 2L', price: 28000, cost: 24000, stock: 36, category: 'Sembako' },
+  { id: uid(), name: 'Gula Pasir 1kg', price: 14500, cost: 12000, stock: 50, category: 'Sembako' },
+  { id: uid(), name: 'Telur Ayam 1kg', price: 27000, cost: 23000, stock: 18, category: 'Sembako' },
+  { id: uid(), name: 'Indomie Goreng', price: 3500, cost: 3000, stock: 120, category: 'Makanan' },
+  { id: uid(), name: 'Kopi Kapal Api', price: 12000, cost: 10000, stock: 45, category: 'Minuman' },
+  { id: uid(), name: 'Sabun Lifebuoy', price: 5500, cost: 4500, stock: 60, category: 'Kebutuhan' },
+  { id: uid(), name: 'Shampoo Clear', price: 8500, cost: 7000, stock: 40, category: 'Kebutuhan' },
+  { id: uid(), name: 'Tissue Paseo', price: 11000, cost: 9000, stock: 30, category: 'Kebutuhan' },
+  { id: uid(), name: 'Aqua 600ml', price: 4000, cost: 3200, stock: 72, category: 'Minuman' },
+  { id: uid(), name: 'Chitato 68g', price: 9500, cost: 8000, stock: 28, category: 'Makanan' },
+  { id: uid(), name: 'Beng-beng', price: 2500, cost: 2000, stock: 80, category: 'Makanan' },
 ];
 
-const CATEGORIES = ['Semua', 'Sembako', 'Makanan', 'Minuman', 'Kebutuhan'];
+const CATEGORIES = ['Semua','Sembako','Makanan','Minuman','Kebutuhan'];
 
-// ==================== COMPONENTS ====================
+// ============ APP ============
 function App() {
-  const [darkMode, setDarkMode] = useState(() => LS.get(STORAGE_KEYS.darkMode, false));
-  const [activeTab, setActiveTab] = useState('kasir');
-  const [products, setProducts] = useState(() => LS.get(STORAGE_KEYS.products, SAMPLE_PRODUCTS));
-  const [cart, setCart] = useState(() => LS.get(STORAGE_KEYS.cart, []));
-  const [transactions, setTransactions] = useState(() => LS.get(STORAGE_KEYS.transactions, []));
-  const [search, setSearch] = useState('');
-  const [catFilter, setCatFilter] = useState('Semua');
-  const [showReceipt, setShowReceipt] = useState(false);
-  const [lastReceipt, setLastReceipt] = useState(null);
-  const [heldOrders, setHeldOrders] = useState(() => LS.get(STORAGE_KEYS.heldOrders, []));
-  const [settings, setSettings] = useState(() => LS.get(STORAGE_KEYS.settings, { storeName: 'AKURATAMA', address: '', phone: '' }));
+  const [tab, setTab] = useState('kasir');
+  const [products, setProducts] = useState(() => {
+    const saved = LS.get(KEYS.products, []);
+    if (saved.length === 0) { LS.set(KEYS.products, SAMPLE_PRODUCTS); return SAMPLE_PRODUCTS; }
+    return saved;
+  });
+  const [cart, setCart] = useState(() => LS.get(KEYS.cart, []));
+  const [transactions, setTransactions] = useState(() => LS.get(KEYS.transactions, []));
+  const [held, setHeld] = useState(() => LS.get(KEYS.held, []));
+  const [settings, setSettings] = useState(() => LS.get(KEYS.settings, { store:'AKURATAMA', address:'', phone:'' }));
+  const [activeShift, setActiveShift] = useState(() => LS.get(KEYS.activeShift, null));
+  const [shifts, setShifts] = useState(() => LS.get(KEYS.shifts, []));
+  const [receipt, setReceipt] = useState(null);
+  const [showOpenShift, setShowOpenShift] = useState(false);
+  const [showCloseShift, setShowCloseShift] = useState(false);
+  const [showShiftReport, setShowShiftReport] = useState(null);
 
-  useEffect(() => {
-    if (darkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-    LS.set(STORAGE_KEYS.darkMode, darkMode);
-  }, [darkMode]);
+  useEffect(() => { LS.set(KEYS.products, products); }, [products]);
+  useEffect(() => { LS.set(KEYS.cart, cart); }, [cart]);
+  useEffect(() => { LS.set(KEYS.transactions, transactions); }, [transactions]);
+  useEffect(() => { LS.set(KEYS.held, held); }, [held]);
+  useEffect(() => { LS.set(KEYS.settings, settings); }, [settings]);
+  useEffect(() => { LS.set(KEYS.activeShift, activeShift); }, [activeShift]);
+  useEffect(() => { LS.set(KEYS.shifts, shifts); }, [shifts]);
 
-  useEffect(() => { LS.set(STORAGE_KEYS.products, products); }, [products]);
-  useEffect(() => { LS.set(STORAGE_KEYS.cart, cart); }, [cart]);
-  useEffect(() => { LS.set(STORAGE_KEYS.transactions, transactions); }, [transactions]);
-  useEffect(() => { LS.set(STORAGE_KEYS.heldOrders, heldOrders); }, [heldOrders]);
-  useEffect(() => { LS.set(STORAGE_KEYS.settings, settings); }, [settings]);
+  const openShift = (employee, startCash) => {
+    const shift = {
+      id: uid(),
+      employee,
+      startCash: parseInt(startCash) || 0,
+      startTime: nowISO(),
+      startDate: todayDate(),
+      isActive: true,
+    };
+    setActiveShift(shift);
+    setShowOpenShift(false);
+  };
 
-  // Inisialisasi produk ke localStorage kalau belum ada
-  useEffect(() => {
-    if (!localStorage.getItem(STORAGE_KEYS.products)) {
-      localStorage.setItem(STORAGE_KEYS.products, JSON.stringify(SAMPLE_PRODUCTS));
-      setProducts(SAMPLE_PRODUCTS);
-    }
-  }, []);
+  const closeShift = (actualCash) => {
+    if (!activeShift) return;
+    const shiftTx = transactions.filter(t => new Date(t.date + 'T' + t.time) >= new Date(activeShift.startTime));
+    const totalSales = shiftTx.reduce((s, t) => s + t.total, 0);
+    const totalProfit = shiftTx.reduce((s, t) => s + t.items.reduce((is, i) => is + ((i.price - (i.cost||0)) * i.qty), 0), 0);
+    const expectedCash = activeShift.startCash + totalSales;
+    const diff = parseInt(actualCash) - expectedCash;
 
-  const filteredProducts = useMemo(() => {
-    return products.filter(p => {
-      const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || (p.barcode && p.barcode.includes(search));
-      const matchCat = catFilter === 'Semua' || p.category === catFilter;
-      return matchSearch && matchCat;
-    });
-  }, [products, search, catFilter]);
+    const closedShift = {
+      ...activeShift,
+      endTime: nowISO(),
+      endDate: todayDate(),
+      isActive: false,
+      totalSales,
+      totalProfit,
+      transactionCount: shiftTx.length,
+      expectedCash,
+      actualCash: parseInt(actualCash) || 0,
+      difference: diff,
+      transactions: shiftTx,
+    };
 
-  const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.qty, 0), [cart]);
-  const cartCount = useMemo(() => cart.reduce((sum, item) => sum + item.qty, 0), [cart]);
+    setShifts(prev => [closedShift, ...prev]);
+    setActiveShift(null);
+    setCart([]);
+    setShowCloseShift(false);
+    setShowShiftReport(closedShift);
+  };
 
-  const addToCart = (product) => {
+  const addToCart = (p) => {
     setCart(prev => {
-      const idx = prev.findIndex(c => c.id === product.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx].qty += 1;
-        return next;
-      }
-      return [...prev, { ...product, qty: 1 }];
+      const i = prev.findIndex(c => c.id === p.id);
+      if (i >= 0) { const n = [...prev]; n[i].qty += 1; return n; }
+      return [...prev, { ...p, qty: 1 }];
     });
   };
 
@@ -280,146 +171,133 @@ function App() {
     setCart(prev => prev.map(c => c.id === id ? { ...c, qty: Math.max(1, c.qty + delta) } : c));
   };
 
-  const removeFromCart = (id) => {
-    setCart(prev => prev.filter(c => c.id !== id));
-  };
-
+  const removeCart = (id) => setCart(prev => prev.filter(c => c.id !== id));
   const clearCart = () => setCart([]);
 
   const holdOrder = () => {
-    if (cart.length === 0) return;
-    const order = { id: uid(), items: [...cart], time: timeStr(), total: cartTotal };
-    setHeldOrders(prev => [...prev, order]);
+    if (!cart.length) return;
+    const total = cart.reduce((s, c) => s + c.price * c.qty, 0);
+    setHeld(prev => [...prev, { id: uid(), items: [...cart], time: nowTime(), total }]);
     setCart([]);
-    alert('Pesanan ditahan!');
   };
 
-  const restoreOrder = (order) => {
+  const restoreHeld = (order) => {
     setCart(order.items);
-    setHeldOrders(prev => prev.filter(o => o.id !== order.id));
+    setHeld(prev => prev.filter(o => o.id !== order.id));
   };
 
   const checkout = (payment) => {
-    if (cart.length === 0) return;
-    const change = payment - cartTotal;
+    if (!cart.length) return;
+    const total = cart.reduce((s, c) => s + c.price * c.qty, 0);
+    const change = payment - total;
     if (change < 0) { alert('Uang kurang!'); return; }
-
-    const tx = {
-      id: uid(),
-      date: today(),
-      time: timeStr(),
-      items: [...cart],
-      total: cartTotal,
-      payment,
-      change,
-    };
-
-    // Kurangi stok
+    const tx = { id: uid(), date: todayDate(), time: nowTime(), items: [...cart], total, payment, change };
     setProducts(prev => prev.map(p => {
       const item = cart.find(c => c.id === p.id);
       return item ? { ...p, stock: Math.max(0, p.stock - item.qty) } : p;
     }));
-
     setTransactions(prev => [tx, ...prev]);
-    setLastReceipt(tx);
+    setReceipt(tx);
     setCart([]);
-    setShowReceipt(true);
   };
 
-  const deleteProduct = (id) => {
-    if (!confirm('Hapus produk ini?')) return;
-    setProducts(prev => prev.filter(p => p.id !== id));
-  };
+  const addProduct = (p) => setProducts(prev => [...prev, { ...p, id: uid() }]);
+  const updateProduct = (id, u) => setProducts(prev => prev.map(p => p.id === id ? { ...p, ...u } : p));
+  const deleteProduct = (id) => { if (confirm('Hapus produk?')) setProducts(prev => prev.filter(p => p.id !== id)); };
 
-  const addProduct = (product) => {
-    setProducts(prev => [...prev, { ...product, id: uid() }]);
-  };
-
-  const updateProduct = (id, updates) => {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-  };
+  // Shift stats for header
+  const shiftStats = useMemo(() => {
+    if (!activeShift) return null;
+    const shiftTx = transactions.filter(t => new Date(t.date + 'T' + t.time) >= new Date(activeShift.startTime));
+    const sales = shiftTx.reduce((s, t) => s + t.total, 0);
+    return { sales, count: shiftTx.length };
+  }, [activeShift, transactions]);
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 pb-20">
+    <div className="min-h-screen bg-dark-950 pb-24">
       {/* Header */}
-      <header className="bg-gradient-to-r from-brand-800 to-brand-900 text-white px-4 py-3 sticky top-0 z-50 shadow-lg">
-        <div className="flex items-center justify-between max-w-lg mx-auto">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      <header className="sticky top-0 z-40 bg-dark-900/80 backdrop-blur-xl border-b border-slate-800">
+        <div className="max-w-lg mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </div>
+              <div>
+                <h1 className="font-bold text-white text-base leading-tight">AKURATAMA</h1>
+                <p className="text-[10px] text-slate-400">POS Offline</p>
+              </div>
             </div>
-            <h1 className="font-bold text-lg tracking-wide">AKURATAMA</h1>
+            <div className="text-right">
+              {activeShift ? (
+                <div>
+                  <p className="text-[10px] text-brand-400 font-semibold">🟢 Shift Aktif · {activeShift.employee}</p>
+                  <p className="text-[10px] text-slate-400">{shiftStats ? fmt(shiftStats.sales) + ' · ' + shiftStats.count + ' tx' : '0'}</p>
+                </div>
+              ) : (
+                <p className="text-[10px] text-rose-400 font-semibold">🔴 Shift Tutup</p>
+              )}
+            </div>
           </div>
-          <button onClick={() => setDarkMode(!darkMode)} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition">
-            {darkMode ? '☀️' : '🌙'}
-          </button>
+
+          {/* Shift Action Bar */}
+          <div className="mt-2.5 flex gap-2">
+            {activeShift ? (
+              <button onClick={() => setShowCloseShift(true)} className="flex-1 py-2 rounded-xl bg-rose-500/10 text-rose-400 text-xs font-semibold border border-rose-500/20 flex items-center justify-center gap-1.5">
+                🔒 Tutup Shift
+              </button>
+            ) : (
+              <button onClick={() => setShowOpenShift(true)} className="flex-1 py-2 rounded-xl bg-brand-500/10 text-brand-400 text-xs font-semibold border border-brand-500/20 flex items-center justify-center gap-1.5">
+                🔓 Buka Shift
+              </button>
+            )}
+            <button onClick={() => setTab('shift')} className="px-3 py-2 rounded-xl bg-slate-700/50 text-slate-300 text-xs font-semibold">
+              📋 Riwayat Shift
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-lg mx-auto px-3 pt-4">
-        {activeTab === 'kasir' && (
-          <KasirTab
-            products={filteredProducts}
-            cart={cart}
-            cartTotal={cartTotal}
-            cartCount={cartCount}
-            search={search}
-            setSearch={setSearch}
-            catFilter={catFilter}
-            setCatFilter={setCatFilter}
-            addToCart={addToCart}
-            updateQty={updateQty}
-            removeFromCart={removeFromCart}
-            clearCart={clearCart}
-            holdOrder={holdOrder}
-            heldOrders={heldOrders}
-            restoreOrder={restoreOrder}
-            checkout={checkout}
-          />
+      <main className="max-w-lg mx-auto px-4 pt-4">
+        {tab === 'kasir' && (
+          activeShift ? (
+            <Kasir products={products} cart={cart} addToCart={addToCart} updateQty={updateQty} removeCart={removeCart} clearCart={clearCart} holdOrder={holdOrder} held={held} restoreHeld={restoreHeld} checkout={checkout} />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center animate-fade-up">
+              <div className="w-20 h-20 rounded-full bg-slate-800 flex items-center justify-center mb-4 text-3xl">🔒</div>
+              <h2 className="font-bold text-lg mb-2">Shift Belum Dibuka</h2>
+              <p className="text-sm text-slate-400 mb-6 max-w-[260px]">Silakan buka shift terlebih dahulu untuk mulai bertransaksi.</p>
+              <button onClick={() => setShowOpenShift(true)} className="px-6 py-3 rounded-xl bg-brand-500 text-white font-semibold text-sm shadow-lg shadow-brand-500/20">
+                🔓 Buka Shift Sekarang
+              </button>
+            </div>
+          )
         )}
-        {activeTab === 'produk' && (
-          <ProdukTab
-            products={products}
-            categories={CATEGORIES}
-            addProduct={addProduct}
-            updateProduct={updateProduct}
-            deleteProduct={deleteProduct}
-          />
-        )}
-        {activeTab === 'riwayat' && (
-          <RiwayatTab transactions={transactions} />
-        )}
-        {activeTab === 'laporan' && (
-          <LaporanTab transactions={transactions} />
-        )}
-        {activeTab === 'pengaturan' && (
-          <PengaturanTab settings={settings} setSettings={setSettings} />
-        )}
+        {tab === 'produk' && <Produk products={products} addProduct={addProduct} updateProduct={updateProduct} deleteProduct={deleteProduct} />}
+        {tab === 'riwayat' && <Riwayat transactions={transactions} />}
+        {tab === 'laporan' && <Laporan transactions={transactions} />}
+        {tab === 'shift' && <ShiftHistory shifts={shifts} onViewReport={setShowShiftReport} />}
+        {tab === 'pengaturan' && <Pengaturan settings={settings} setSettings={setSettings} products={products} transactions={transactions} setProducts={setProducts} setTransactions={setTransactions} setCart={setCart} setHeld={setHeld} setShifts={setShifts} setActiveShift={setActiveShift} />}
       </main>
 
-      {/* Receipt Modal */}
-      {showReceipt && lastReceipt && (
-        <ReceiptModal receipt={lastReceipt} settings={settings} onClose={() => setShowReceipt(false)} />
-      )}
+      {receipt && <ReceiptModal receipt={receipt} settings={settings} onClose={() => setReceipt(null)} />}
+      {showOpenShift && <OpenShiftModal onOpen={openShift} onCancel={() => setShowOpenShift(false)} />}
+      {showCloseShift && <CloseShiftModal activeShift={activeShift} shiftStats={shiftStats} onClose={closeShift} onCancel={() => setShowCloseShift(false)} />}
+      {showShiftReport && <ShiftReportModal shift={showShiftReport} settings={settings} onClose={() => setShowShiftReport(null)} />}
 
       {/* Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 z-40">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 glass border-t border-slate-700/50">
         <div className="max-w-lg mx-auto flex justify-around py-2">
           {[
-            { id: 'kasir', icon: '🛒', label: 'Kasir' },
-            { id: 'produk', icon: '📦', label: 'Produk' },
-            { id: 'riwayat', icon: '📋', label: 'Riwayat' },
-            { id: 'laporan', icon: '📊', label: 'Laporan' },
-            { id: 'pengaturan', icon: '⚙️', label: 'Pengaturan' },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition ${activeTab === tab.id ? 'text-primary-500' : 'text-slate-400'}`}
-            >
-              <span className="text-lg">{tab.icon}</span>
-              <span className="text-[10px] font-medium">{tab.label}</span>
+            {id:'kasir', icon:'🛒', label:'Kasir'},
+            {id:'produk', icon:'📦', label:'Produk'},
+            {id:'riwayat', icon:'📋', label:'Riwayat'},
+            {id:'laporan', icon:'📊', label:'Laporan'},
+            {id:'pengaturan', icon:'⚙️', label:'Seting'},
+          ].map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition ${tab===t.id ? 'text-brand-400' : 'text-slate-500'}`}>
+              <span className="text-lg">{t.icon}</span>
+              <span className="text-[9px] font-medium">{t.label}</span>
             </button>
           ))}
         </div>
@@ -428,121 +306,310 @@ function App() {
   );
 }
 
-// ==================== KASIR TAB ====================
-function KasirTab({ products, cart, cartTotal, cartCount, search, setSearch, catFilter, setCatFilter, addToCart, updateQty, removeFromCart, clearCart, holdOrder, heldOrders, restoreOrder, checkout }) {
-  const [showCart, setShowCart] = useState(false);
-  const [payment, setPayment] = useState('');
+// ============ OPEN SHIFT MODAL ============
+function OpenShiftModal({ onOpen, onCancel }) {
+  const [employee, setEmployee] = useState('');
+  const [startCash, setStartCash] = useState('');
 
   return (
-    <div className="fade-in">
-      {/* Search */}
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="bg-dark-900 rounded-3xl border border-slate-700 w-full max-w-sm p-6 animate-fade-up" onClick={e => e.stopPropagation()}>
+        <div className="text-center mb-6">
+          <div className="w-14 h-14 rounded-2xl bg-brand-500/10 flex items-center justify-center mx-auto mb-3 text-2xl">🔓</div>
+          <h2 className="font-bold text-xl">Buka Shift</h2>
+          <p className="text-xs text-slate-400 mt-1">Masukkan data untuk memulai shift</p>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Nama Karyawan</label>
+            <input autoFocus placeholder="Contoh: Budi" value={employee} onChange={e => setEmployee(e.target.value)}
+              className="w-full mt-2 px-4 py-3.5 rounded-xl bg-dark-800 border border-slate-700 text-white text-sm focus:border-brand-500 transition" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Modal Awal (Kas)</label>
+            <input type="number" placeholder="0" value={startCash} onChange={e => setStartCash(e.target.value)}
+              className="w-full mt-2 px-4 py-3.5 rounded-xl bg-dark-800 border border-slate-700 text-white text-sm focus:border-brand-500 transition" />
+          </div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button onClick={onCancel} className="flex-1 py-3.5 rounded-xl bg-slate-700 text-white font-semibold text-sm">Batal</button>
+          <button onClick={() => { if(!employee){alert('Nama karyawan wajib diisi!');return;} onOpen(employee, startCash); }}
+            className="flex-1 py-3.5 rounded-xl bg-brand-500 text-white font-semibold text-sm shadow-lg shadow-brand-500/20">Buka Shift</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============ CLOSE SHIFT MODAL ============
+function CloseShiftModal({ activeShift, shiftStats, onClose, onCancel }) {
+  const [actualCash, setActualCash] = useState('');
+  const expectedCash = (activeShift?.startCash || 0) + (shiftStats?.sales || 0);
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="bg-dark-900 rounded-3xl border border-slate-700 w-full max-w-sm p-6 animate-fade-up" onClick={e => e.stopPropagation()}>
+        <div className="text-center mb-6">
+          <div className="w-14 h-14 rounded-2xl bg-rose-500/10 flex items-center justify-center mx-auto mb-3 text-2xl">🔒</div>
+          <h2 className="font-bold text-xl">Tutup Shift</h2>
+          <p className="text-xs text-slate-400 mt-1">{activeShift?.employee} · {activeShift?.startDate}</p>
+        </div>
+
+        <div className="bg-dark-800 rounded-2xl p-4 space-y-3 mb-5 border border-slate-700/50">
+          <div className="flex justify-between text-sm">
+            <span className="text-slate-400">Modal Awal</span>
+            <span className="font-medium">{fmt(activeShift?.startCash || 0)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-slate-400">Penjualan Shift</span>
+            <span className="font-medium text-brand-400">{fmt(shiftStats?.sales || 0)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-slate-400">Jumlah Transaksi</span>
+            <span className="font-medium">{shiftStats?.count || 0}</span>
+          </div>
+          <div className="border-t border-slate-700/50 pt-3 flex justify-between text-sm">
+            <span className="text-slate-300 font-semibold">Kas Seharusnya</span>
+            <span className="font-bold text-white">{fmt(expectedCash)}</span>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Kas Aktual (Hitung Fisik)</label>
+          <input autoFocus type="number" placeholder="Masukkan jumlah uang di laci" value={actualCash} onChange={e => setActualCash(e.target.value)}
+            className="w-full mt-2 px-4 py-3.5 rounded-xl bg-dark-800 border border-slate-700 text-white text-sm focus:border-brand-500 transition" />
+        </div>
+
+        {parseInt(actualCash) > 0 && (
+          <div className={`mt-3 text-center py-2 rounded-xl text-sm font-semibold ${parseInt(actualCash) === expectedCash ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : parseInt(actualCash) > expectedCash ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+            {parseInt(actualCash) === expectedCash ? '✅ Kas sesuai' : parseInt(actualCash) > expectedCash ? '💰 Kas lebih: ' + fmt(parseInt(actualCash) - expectedCash) : '⚠️ Kas kurang: ' + fmt(expectedCash - parseInt(actualCash))}
+          </div>
+        )}
+
+        <div className="flex gap-3 mt-5">
+          <button onClick={onCancel} className="flex-1 py-3.5 rounded-xl bg-slate-700 text-white font-semibold text-sm">Batal</button>
+          <button onClick={() => { if(!actualCash){alert('Masukkan kas aktual!');return;} onClose(actualCash); }}
+            className="flex-1 py-3.5 rounded-xl bg-rose-500 text-white font-semibold text-sm shadow-lg shadow-rose-500/20">Tutup & Laporan</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============ SHIFT REPORT MODAL ============
+function ShiftReportModal({ shift, settings, onClose }) {
+  const duration = Math.round((new Date(shift.endTime) - new Date(shift.startTime)) / 60000);
+  const hours = Math.floor(duration / 60);
+  const mins = duration % 60;
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 no-print">
+      <div className="bg-white rounded-2xl max-w-xs w-full shadow-2xl overflow-hidden animate-fade-up">
+        <div id="receipt-print" className="p-5 text-slate-900" style={{fontFamily:'monospace', fontSize:'13px', lineHeight:'1.6'}}>
+          <div className="text-center mb-3">
+            <p className="font-bold text-base">{settings.store}</p>
+            <p className="text-xs text-slate-500">{settings.address}</p>
+            <p className="text-xs text-slate-500">{settings.phone}</p>
+            <p className="font-bold text-sm mt-2">LAPORAN SHIFT</p>
+            <p className="text-xs text-slate-400">{shift.startDate}</p>
+          </div>
+
+          <div className="border-t border-b border-dashed border-slate-300 py-2 my-2 space-y-1">
+            <div className="flex justify-between"><span>Karyawan</span><span className="font-medium">{shift.employee}</span></div>
+            <div className="flex justify-between"><span>Mulai</span><span>{new Date(shift.startTime).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span></div>
+            <div className="flex justify-between"><span>Selesai</span><span>{new Date(shift.endTime).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span></div>
+            <div className="flex justify-between"><span>Durasi</span><span>{hours}j {mins}m</span></div>
+          </div>
+
+          <div className="border-b border-dashed border-slate-300 py-2 my-2 space-y-1">
+            <div className="flex justify-between"><span>Modal Awal</span><span>{fmt(shift.startCash)}</span></div>
+            <div className="flex justify-between"><span>Total Penjualan</span><span className="font-medium">{fmt(shift.totalSales)}</span></div>
+            <div className="flex justify-between"><span>Total Keuntungan</span><span>{fmt(shift.totalProfit)}</span></div>
+            <div className="flex justify-between"><span>Jumlah Transaksi</span><span>{shift.transactionCount}</span></div>
+          </div>
+
+          <div className="py-2 space-y-1">
+            <div className="flex justify-between font-bold text-sm"><span>Kas Seharusnya</span><span>{fmt(shift.expectedCash)}</span></div>
+            <div className="flex justify-between"><span>Kas Aktual</span><span>{fmt(shift.actualCash)}</span></div>
+            <div className="flex justify-between font-bold"><span className={shift.difference >= 0 ? 'text-emerald-600' : 'text-rose-600'}>Selisih</span><span className={shift.difference >= 0 ? 'text-emerald-600' : 'text-rose-600'}>{shift.difference >= 0 ? '+' : ''}{fmt(shift.difference)}</span></div>
+          </div>
+
+          <p className="text-center text-xs text-slate-400 mt-4">Terima Kasih!</p>
+        </div>
+
+        <div className="p-4 border-t border-slate-100 flex gap-3 no-print bg-white">
+          <button onClick={() => window.print()} className="flex-1 py-3 rounded-xl bg-brand-500 text-white font-semibold text-sm shadow-lg shadow-brand-500/20">🖨️ Print</button>
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm">Tutup</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============ SHIFT HISTORY ============
+function ShiftHistory({ shifts, onViewReport }) {
+  return (
+    <div className="animate-fade-up">
+      <h2 className="font-bold text-lg mb-4">📋 Riwayat Shift</h2>
+      {shifts.length === 0 && <p className="text-slate-500 text-center py-16">Belum ada riwayat shift</p>}
+      <div className="space-y-2.5">
+        {shifts.map(s => (
+          <button key={s.id} onClick={() => onViewReport(s)} className="w-full text-left bg-dark-800 rounded-2xl p-4 border border-slate-700/50 card-hover">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <p className="font-semibold text-sm text-white">{s.employee}</p>
+                <p className="text-[10px] text-slate-400">{s.startDate} · {new Date(s.startTime).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})} - {new Date(s.endTime).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</p>
+              </div>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.difference === 0 ? 'bg-emerald-500/10 text-emerald-400' : s.difference > 0 ? 'bg-blue-500/10 text-blue-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                {s.difference === 0 ? 'Sesuai' : s.difference > 0 ? 'Lebih' : 'Kurang'}
+              </span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-400">{s.transactionCount} transaksi</span>
+              <span className="text-brand-400 font-semibold">{fmt(s.totalSales)}</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============ KASIR ============
+function Kasir({ products, cart, addToCart, updateQty, removeCart, clearCart, holdOrder, held, restoreHeld, checkout }) {
+  const [search, setSearch] = useState('');
+  const [cat, setCat] = useState('Semua');
+  const [showCart, setShowCart] = useState(false);
+  const [payment, setPayment] = useState('');
+  const [showHeld, setShowHeld] = useState(false);
+
+  const filtered = useMemo(() => {
+    return products.filter(p => {
+      const m = p.name.toLowerCase().includes(search.toLowerCase());
+      const c = cat === 'Semua' || p.category === cat;
+      return m && c;
+    });
+  }, [products, search, cat]);
+
+  const total = useMemo(() => cart.reduce((s, c) => s + c.price * c.qty, 0), [cart]);
+  const count = useMemo(() => cart.reduce((s, c) => s + c.qty, 0), [cart]);
+
+  return (
+    <div className="animate-fade-up">
       <div className="relative mb-3">
-        <input
-          type="text"
-          placeholder="Cari produk..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-400"
-        />
-        <span className="absolute left-3 top-2.5 text-slate-400">🔍</span>
+        <input type="text" placeholder="Cari produk..." value={search} onChange={e => setSearch(e.target.value)}
+          className="w-full pl-10 pr-4 py-3 rounded-2xl bg-dark-800 border border-slate-700 text-white placeholder-slate-500 text-sm focus:border-brand-500 transition" />
+        <span className="absolute left-3.5 top-3 text-slate-500 text-base">🔍</span>
       </div>
 
-      {/* Categories */}
-      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-3">
-        {['Semua', 'Sembako', 'Makanan', 'Minuman', 'Kebutuhan'].map(cat => (
-          <button
-            key={cat}
-            onClick={() => setCatFilter(cat)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition ${catFilter === cat ? 'bg-primary-500 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-          >
-            {cat}
+      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
+        {CATEGORIES.map(c => (
+          <button key={c} onClick={() => setCat(c)}
+            className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition ${cat===c ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/25' : 'bg-dark-800 text-slate-400 border border-slate-700'}`}>
+            {c}
           </button>
         ))}
       </div>
 
-      {/* Products Grid */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        {products.map(p => (
-          <button
-            key={p.id}
-            onClick={() => addToCart(p)}
-            className="bg-white dark:bg-slate-800 rounded-xl p-3 text-left shadow-sm border border-slate-100 dark:border-slate-700 active:scale-95 transition"
-          >
-            <p className="font-medium text-sm mb-1 line-clamp-2">{p.name}</p>
-            <p className="text-primary-500 font-bold">{fmt(p.price)}</p>
-            <p className="text-[10px] text-slate-400 mt-1">Stk: {p.stock}</p>
+      <div className="grid grid-cols-2 gap-3 pb-4">
+        {filtered.map(p => (
+          <button key={p.id} onClick={() => addToCart(p)} className="card-hover bg-dark-800 rounded-2xl p-3.5 text-left border border-slate-700/50">
+            <div className="flex items-start justify-between mb-2">
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-300">{p.category}</span>
+              <span className="text-[10px] text-slate-500">Stk {p.stock}</span>
+            </div>
+            <p className="font-semibold text-sm text-white mb-1 line-clamp-2 leading-snug">{p.name}</p>
+            <p className="text-brand-400 font-bold text-base">{fmt(p.price)}</p>
           </button>
         ))}
       </div>
 
-      {/* Cart Summary Bar */}
       {cart.length > 0 && (
-        <div className="fixed bottom-16 left-0 right-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-4 py-2 z-30">
-          <div className="max-w-lg mx-auto flex items-center justify-between">
+        <div className="fixed bottom-20 left-0 right-0 z-30 px-4">
+          <div className="max-w-lg mx-auto bg-dark-800 rounded-2xl border border-slate-700/50 p-3 flex items-center justify-between shadow-2xl">
             <div>
-              <p className="text-xs text-slate-500">{cartCount} item</p>
-              <p className="font-bold text-primary-500">{fmt(cartTotal)}</p>
+              <p className="text-[10px] text-slate-400">{count} item</p>
+              <p className="text-brand-400 font-bold text-lg">{fmt(total)}</p>
             </div>
             <div className="flex gap-2">
-              <button onClick={holdOrder} className="px-3 py-2 rounded-lg bg-amber-100 text-amber-700 text-sm font-medium">⏸️ Tahan</button>
-              <button onClick={() => setShowCart(true)} className="px-4 py-2 rounded-lg bg-primary-500 text-white text-sm font-medium">🛒 Keranjang</button>
+              <button onClick={holdOrder} className="px-3 py-2 rounded-xl bg-amber-500/10 text-amber-400 text-xs font-semibold border border-amber-500/20">⏸️ Tahan</button>
+              <button onClick={() => setShowCart(true)} className="px-4 py-2 rounded-xl bg-brand-500 text-white text-xs font-semibold shadow-lg shadow-brand-500/20">🛒 Bayar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Cart Modal */}
+      {held.length > 0 && !showCart && (
+        <button onClick={() => setShowHeld(true)} className="fixed bottom-36 right-4 z-30 w-12 h-12 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg text-lg font-bold">
+          {held.length}
+        </button>
+      )}
+
       {showCart && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
-          <div className="w-full max-w-lg mx-auto bg-white dark:bg-slate-800 rounded-t-2xl slide-up max-h-[80vh] flex flex-col">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end" onClick={() => setShowCart(false)}>
+          <div className="w-full max-w-lg mx-auto bg-dark-900 rounded-t-3xl border-t border-slate-700 animate-slide-up max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <h2 className="font-bold text-lg">🛒 Keranjang</h2>
-              <button onClick={() => setShowCart(false)} className="text-slate-400 text-xl">✕</button>
+              <button onClick={() => setShowCart(false)} className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center">✕</button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {cart.map(item => (
-                <div key={item.id} className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700">
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{item.name}</p>
-                    <p className="text-xs text-slate-500">{fmt(item.price)} x {item.qty}</p>
+                <div key={item.id} className="flex items-center gap-3 bg-dark-800 rounded-xl p-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{item.name}</p>
+                    <p className="text-xs text-slate-400">{fmt(item.price)} / pcs</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => updateQty(item.id, -1)} className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 text-sm">−</button>
-                    <span className="w-6 text-center text-sm font-medium">{item.qty}</span>
-                    <button onClick={() => updateQty(item.id, 1)} className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 text-sm">+</button>
-                    <button onClick={() => removeFromCart(item.id)} className="ml-2 text-rose-500 text-sm">🗑️</button>
+                    <button onClick={() => updateQty(item.id, -1)} className="w-8 h-8 rounded-lg bg-slate-700 text-white text-sm font-bold">−</button>
+                    <span className="w-6 text-center text-sm font-semibold">{item.qty}</span>
+                    <button onClick={() => updateQty(item.id, 1)} className="w-8 h-8 rounded-lg bg-brand-500 text-white text-sm font-bold">+</button>
                   </div>
+                  <button onClick={() => removeCart(item.id)} className="text-rose-400 text-sm ml-1">🗑</button>
                 </div>
               ))}
             </div>
-            <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-              <div className="flex justify-between mb-2">
-                <span className="text-slate-500">Total</span>
-                <span className="font-bold text-lg">{fmt(cartTotal)}</span>
+            <div className="p-4 border-t border-slate-800 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 text-sm">Total Belanja</span>
+                <span className="font-bold text-xl text-brand-400">{fmt(total)}</span>
               </div>
-              <div className="flex gap-2 mb-3">
-                <input
-                  type="number"
-                  placeholder="Bayar"
-                  value={payment}
-                  onChange={e => setPayment(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
-                />
-                <button onClick={() => { setPayment(cartTotal); }} className="px-3 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-sm">Uang Pas</button>
+              <div className="flex gap-2">
+                <input type="number" placeholder="Nominal bayar" value={payment} onChange={e => setPayment(e.target.value)}
+                  className="flex-1 px-4 py-3 rounded-xl bg-dark-800 border border-slate-700 text-white text-sm focus:border-brand-500 transition" />
+                <button onClick={() => setPayment(total)} className="px-4 py-3 rounded-xl bg-slate-700 text-white text-xs font-semibold whitespace-nowrap">Uang Pas</button>
               </div>
-              {parseInt(payment) >= cartTotal && (
-                <p className="text-center text-emerald-500 font-medium mb-2">Kembalian: {fmt(parseInt(payment) - cartTotal)}</p>
+              {parseInt(payment) >= total && (
+                <div className="text-center py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <p className="text-emerald-400 font-semibold text-sm">Kembalian: {fmt(parseInt(payment) - total)}</p>
+                </div>
               )}
               <div className="flex gap-2">
-                <button onClick={clearCart} className="flex-1 py-2.5 rounded-xl bg-rose-100 text-rose-700 font-medium">Kosongkan</button>
-                <button
-                  onClick={() => { checkout(parseInt(payment)); setShowCart(false); setPayment(''); }}
-                  disabled={parseInt(payment) < cartTotal}
-                  className="flex-1 py-2.5 rounded-xl bg-primary-500 text-white font-medium disabled:opacity-50"
-                >
-                  💰 Bayar
-                </button>
+                <button onClick={clearCart} className="flex-1 py-3 rounded-xl bg-rose-500/10 text-rose-400 font-semibold text-sm border border-rose-500/20">Kosongkan</button>
+                <button onClick={() => { checkout(parseInt(payment)); setShowCart(false); setPayment(''); }}
+                  disabled={parseInt(payment) < total} className="flex-1 py-3 rounded-xl bg-brand-500 text-white font-semibold text-sm disabled:opacity-40 shadow-lg shadow-brand-500/20">Bayar Sekarang</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showHeld && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowHeld(false)}>
+          <div className="bg-dark-900 rounded-3xl border border-slate-700 w-full max-w-sm max-h-[70vh] flex flex-col animate-fade-up" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+              <h2 className="font-bold">⏸️ Pesanan Ditahan</h2>
+              <button onClick={() => setShowHeld(false)} className="text-slate-400">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {held.map(o => (
+                <button key={o.id} onClick={() => { restoreHeld(o); setShowHeld(false); }} className="w-full text-left bg-dark-800 rounded-xl p-3 border border-slate-700/50">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">{o.time}</span>
+                    <span className="text-brand-400 font-bold">{fmt(o.total)}</span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">{o.items.length} item</p>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -551,100 +618,98 @@ function KasirTab({ products, cart, cartTotal, cartCount, search, setSearch, cat
   );
 }
 
-// ==================== PRODUK TAB ====================
-function ProdukTab({ products, categories, addProduct, updateProduct, deleteProduct }) {
+// ============ PRODUK ============
+function Produk({ products, addProduct, updateProduct, deleteProduct }) {
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', price: '', cost: '', stock: '', barcode: '', category: 'Sembako' });
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({ name:'', price:'', cost:'', stock:'', category:'Sembako' });
+
+  const openAdd = () => { setEditId(null); setForm({ name:'', price:'', cost:'', stock:'', category:'Sembako' }); setShowForm(true); };
+  const openEdit = (p) => { setEditId(p.id); setForm({ name:p.name, price:p.price.toString(), cost:p.cost.toString(), stock:p.stock.toString(), category:p.category }); setShowForm(true); };
 
   const submit = () => {
-    const data = {
-      name: form.name,
-      price: parseInt(form.price) || 0,
-      cost: parseInt(form.cost) || 0,
-      stock: parseInt(form.stock) || 0,
-      barcode: form.barcode || '',
-      category: form.category,
-    };
+    const data = { name: form.name, price: parseInt(form.price)||0, cost: parseInt(form.cost)||0, stock: parseInt(form.stock)||0, category: form.category };
     if (!data.name || !data.price) { alert('Nama dan harga wajib diisi!'); return; }
-    if (editing) {
-      updateProduct(editing, data);
-    } else {
-      addProduct(data);
-    }
+    editId ? updateProduct(editId, data) : addProduct(data);
     setShowForm(false);
-    setEditing(null);
-    setForm({ name: '', price: '', cost: '', stock: '', barcode: '', category: 'Sembako' });
   };
 
   return (
-    <div className="fade-in">
-      <div className="flex justify-between items-center mb-3">
-        <h2 className="font-bold text-lg">📦 Daftar Produk</h2>
-        <button onClick={() => setShowForm(true)} className="px-3 py-1.5 rounded-lg bg-primary-500 text-white text-sm font-medium">+ Tambah</button>
+    <div className="animate-fade-up">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="font-bold text-lg">📦 Produk</h2>
+        <button onClick={openAdd} className="px-4 py-2 rounded-xl bg-brand-500 text-white text-xs font-semibold shadow-lg shadow-brand-500/20">+ Tambah</button>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {products.map(p => (
-          <div key={p.id} className="bg-white dark:bg-slate-800 rounded-xl p-3 flex items-center justify-between shadow-sm">
-            <div>
-              <p className="font-medium text-sm">{p.name}</p>
-              <p className="text-xs text-slate-500">{fmt(p.price)} | Stok: {p.stock} {p.barcode ? '| 📷 ' + p.barcode : ''}</p>
+          <div key={p.id} className="bg-dark-800 rounded-2xl p-4 border border-slate-700/50 flex items-center justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-300">{p.category}</span>
+              </div>
+              <p className="font-semibold text-sm text-white">{p.name}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{fmt(p.price)} · Stok {p.stock} · Modal {fmt(p.cost)}</p>
             </div>
-            <div className="flex gap-1">
-              <button onClick={() => { setEditing(p.id); setForm({ ...p, price: p.price.toString(), cost: p.cost.toString(), stock: p.stock.toString() }); setShowForm(true); }} className="p-1.5 text-blue-500">✏️</button>
-              <button onClick={() => deleteProduct(p.id)} className="p-1.5 text-rose-500">🗑️</button>
+            <div className="flex gap-1 ml-2">
+              <button onClick={() => openEdit(p)} className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center text-sm">✏️</button>
+              <button onClick={() => deleteProduct(p.id)} className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center text-sm">🗑</button>
             </div>
           </div>
         ))}
       </div>
 
-      {showForm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 w-full max-w-sm">
-            <h3 className="font-bold mb-3">{editing ? '✏️ Edit' : '+ Tambah'} Produk</h3>
-            <div className="space-y-2">
-              <input placeholder="Nama produk" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm" />
-              <input placeholder="Barcode (opsional)" value={form.barcode} onChange={e => setForm({...form, barcode: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm" />
-              <div className="flex gap-2">
-                <input type="number" placeholder="Harga jual" value={form.price} onChange={e => setForm({...form, price: e.target.value})} className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm" />
-                <input type="number" placeholder="Harga modal" value={form.cost} onChange={e => setForm({...form, cost: e.target.value})} className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm" />
-              </div>
-              <div className="flex gap-2">
-                <input type="number" placeholder="Stok" value={form.stock} onChange={e => setForm({...form, stock: e.target.value})} className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm" />
-                <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm">
-                  {categories.filter(c => c !== 'Semua').map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={() => { setShowForm(false); setEditing(null); }} className="flex-1 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 font-medium text-sm">Batal</button>
-              <button onClick={submit} className="flex-1 py-2 rounded-xl bg-primary-500 text-white font-medium text-sm">Simpan</button>
-            </div>
-          </div>
+  {showForm && (
+  <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
+    <div className="bg-dark-900 rounded-3xl border border-slate-700 w-full max-w-sm p-5 animate-fade-up" onClick={e => e.stopPropagation()}>
+      <h3 className="font-bold text-lg mb-4">{editId ? '✏️ Edit' : '+ Tambah'} Produk</h3>
+      <div className="space-y-3">
+        <input placeholder="Nama produk" value={form.name} onChange={e => setForm({...form, name:e.target.value})} className="w-full px-4 py-3 rounded-xl bg-dark-800 border border-slate-700 text-white text-sm focus:border-brand-500 transition" />
+        <div className="flex gap-3">
+          <input type="number" placeholder="Harga jual" value={form.price} onChange={e => setForm({...form, price:e.target.value})} className="flex-1 px-4 py-3 rounded-xl bg-dark-800 border border-slate-700 text-white text-sm focus:border-brand-500 transition" />
+          <input type="number" placeholder="Harga modal" value={form.cost} onChange={e => setForm({...form, cost:e.target.value})} className="flex-1 px-4 py-3 rounded-xl bg-dark-800 border border-slate-700 text-white text-sm focus:border-brand-500 transition" />
         </div>
-      )}
+        <div className="flex gap-3">
+          <input type="number" placeholder="Stok" value={form.stock} onChange={e => setForm({...form, stock:e.target.value})} className="flex-1 px-4 py-3 rounded-xl bg-dark-800 border border-slate-700 text-white text-sm focus:border-brand-500 transition" />
+          <select value={form.category} onChange={e => setForm({...form, category:e.target.value})} className="flex-1 px-4 py-3 rounded-xl bg-dark-800 border border-slate-700 text-white text-sm focus:border-brand-500 transition">
+            {CATEGORIES.filter(c=>c!=='Semua').map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="flex gap-3 mt-5">
+        <button onClick={() => setShowForm(false)} className="flex-1 py-3 rounded-xl bg-slate-700 text-white font-semibold text-sm">Batal</button>
+        <button onClick={submit} className="flex-1 py-3 rounded-xl bg-brand-500 text-white font-semibold text-sm shadow-lg shadow-brand-500/20">Simpan</button>
+      </div>
     </div>
+  </div>
+)}
+</div>
   );
 }
 
-// ==================== RIWAYAT TAB ====================
-function RiwayatTab({ transactions }) {
+// ============ RIWAYAT ============
+function Riwayat({ transactions }) {
   return (
-    <div className="fade-in">
-      <h2 className="font-bold text-lg mb-3">📋 Riwayat Transaksi</h2>
-      {transactions.length === 0 && <p className="text-slate-500 text-center py-10">Belum ada transaksi</p>}
-      <div className="space-y-2">
+    <div className="animate-fade-up">
+      <h2 className="font-bold text-lg mb-4">📋 Riwayat</h2>
+      {transactions.length === 0 && <p className="text-slate-500 text-center py-16">Belum ada transaksi</p>}
+      <div className="space-y-2.5">
         {transactions.map(tx => (
-          <div key={tx.id} className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm">
-            <div className="flex justify-between items-start">
+          <div key={tx.id} className="bg-dark-800 rounded-2xl p-4 border border-slate-700/50">
+            <div className="flex justify-between items-start mb-2">
               <div>
-                <p className="font-medium text-sm">{tx.time}</p>
-                <p className="text-xs text-slate-500">{tx.items.length} item</p>
+                <p className="text-xs text-brand-400 font-semibold">{tx.date}</p>
+                <p className="text-sm text-white font-medium">{tx.time}</p>
               </div>
-              <p className="font-bold text-primary-500">{fmt(tx.total)}</p>
+              <p className="font-bold text-brand-400">{fmt(tx.total)}</p>
             </div>
-            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500">
-              Bayar: {fmt(tx.payment)} | Kembalian: {fmt(tx.change)}
+            <div className="text-xs text-slate-400 space-y-0.5">
+              {tx.items.map((it, i) => (
+                <p key={i}>{it.name} x{it.qty} = {fmt(it.price * it.qty)}</p>
+              ))}
+            </div>
+            <div className="mt-2 pt-2 border-t border-slate-700/50 flex justify-between text-xs text-slate-400">
+              <span>Bayar: {fmt(tx.payment)}</span>
+              <span>Kembali: {fmt(tx.change)}</span>
             </div>
           </div>
         ))}
@@ -653,42 +718,45 @@ function RiwayatTab({ transactions }) {
   );
 }
 
-// ==================== LAPORAN TAB ====================
-function LaporanTab({ transactions }) {
-  const todayTx = transactions.filter(t => t.date === today());
+// ============ LAPORAN ============
+function Laporan({ transactions }) {
+  const todayTx = transactions.filter(t => t.date === todayDate());
   const todayRevenue = todayTx.reduce((s, t) => s + t.total, 0);
-  const todayProfit = todayTx.reduce((s, t) => s + t.items.reduce((is, i) => is + (i.price - (i.cost||0)) * i.qty, 0), 0);
-  const totalTx = transactions.length;
+  const todayProfit = todayTx.reduce((s, t) => s + t.items.reduce((is, i) => is + ((i.price - (i.cost||0)) * i.qty), 0), 0);
   const totalRevenue = transactions.reduce((s, t) => s + t.total, 0);
 
   return (
-    <div className="fade-in">
-      <h2 className="font-bold text-lg mb-3">📊 Laporan</h2>
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm">
-          <p className="text-xs text-slate-500">Penjualan Hari Ini</p>
-          <p className="font-bold text-lg text-primary-500">{fmt(todayRevenue)}</p>
+    <div className="animate-fade-up">
+      <h2 className="font-bold text-lg mb-4">📊 Laporan</h2>
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="bg-dark-800 rounded-2xl p-4 border border-slate-700/50">
+          <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Penjualan Hari Ini</p>
+          <p className="text-xl font-bold text-brand-400 mt-1">{fmt(todayRevenue)}</p>
+          <p className="text-[10px] text-slate-500 mt-1">{todayTx.length} transaksi</p>
         </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm">
-          <p className="text-xs text-slate-500">Keuntungan Hari Ini</p>
-          <p className="font-bold text-lg text-emerald-500">{fmt(todayProfit)}</p>
+        <div className="bg-dark-800 rounded-2xl p-4 border border-slate-700/50">
+          <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Keuntungan</p>
+          <p className="text-xl font-bold text-emerald-400 mt-1">{fmt(todayProfit)}</p>
+          <p className="text-[10px] text-slate-500 mt-1">Hari ini</p>
         </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm">
-          <p className="text-xs text-slate-500">Total Transaksi</p>
-          <p className="font-bold text-lg">{totalTx}</p>
+        <div className="bg-dark-800 rounded-2xl p-4 border border-slate-700/50">
+          <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Penjualan</p>
+          <p className="text-xl font-bold text-white mt-1">{fmt(totalRevenue)}</p>
+          <p className="text-[10px] text-slate-500 mt-1">Semua waktu</p>
         </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm">
-          <p className="text-xs text-slate-500">Total Penjualan</p>
-          <p className="font-bold text-lg">{fmt(totalRevenue)}</p>
+        <div className="bg-dark-800 rounded-2xl p-4 border border-slate-700/50">
+          <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Transaksi</p>
+          <p className="text-xl font-bold text-white mt-1">{transactions.length}</p>
+          <p className="text-[10px] text-slate-500 mt-1">Semua waktu</p>
         </div>
       </div>
-      <h3 className="font-medium mb-2">Transaksi Hari Ini ({todayTx.length})</h3>
-      {todayTx.length === 0 && <p className="text-slate-500 text-sm">Tidak ada transaksi hari ini</p>}
+      <h3 className="font-semibold text-sm mb-3 text-slate-300">Transaksi Hari Ini</h3>
+      {todayTx.length === 0 && <p className="text-slate-500 text-sm text-center py-8">Tidak ada transaksi</p>}
       <div className="space-y-2">
         {todayTx.map(tx => (
-          <div key={tx.id} className="bg-white dark:bg-slate-800 rounded-xl p-3 text-sm flex justify-between">
-            <span>{tx.time}</span>
-            <span className="font-medium">{fmt(tx.total)}</span>
+          <div key={tx.id} className="bg-dark-800 rounded-xl p-3 flex justify-between items-center border border-slate-700/50">
+            <span className="text-sm text-white">{tx.time}</span>
+            <span className="font-semibold text-brand-400">{fmt(tx.total)}</span>
           </div>
         ))}
       </div>
@@ -696,73 +764,82 @@ function LaporanTab({ transactions }) {
   );
 }
 
-// ==================== PENGATURAN TAB ====================
-function PengaturanTab({ settings, setSettings }) {
-  const clearAll = () => {
-    if (!confirm('HAPUS SEMUA DATA? Ini tidak bisa dibatalkan!')) return;
-    Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
+// ============ PENGATURAN ============
+function Pengaturan({ settings, setSettings, products, transactions, setProducts, setTransactions, setCart, setHeld, setShifts, setActiveShift }) {
+  const resetAll = () => {
+    if (!confirm('HAPUS SEMUA DATA? Aksi ini tidak bisa dibatalkan!')) return;
+    Object.values(KEYS).forEach(k => localStorage.removeItem(k));
     window.location.reload();
   };
 
   return (
-    <div className="fade-in">
-      <h2 className="font-bold text-lg mb-3">⚙️ Pengaturan</h2>
-      <div className="bg-white dark:bg-slate-800 rounded-xl p-4 space-y-3 shadow-sm">
-        <div>
-          <label className="text-sm text-slate-500">Nama Toko</label>
-          <input value={settings.storeName} onChange={e => setSettings({...settings, storeName: e.target.value})} className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900" />
+    <div className="animate-fade-up">
+      <h2 className="font-bold text-lg mb-4">⚙️ Pengaturan</h2>
+      <div className="bg-dark-800 rounded-2xl border border-slate-700/50 overflow-hidden mb-4">
+        <div className="p-4 border-b border-slate-700/50">
+          <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Nama Toko</label>
+          <input value={settings.store} onChange={e => setSettings({...settings, store:e.target.value})} className="w-full mt-2 px-4 py-3 rounded-xl bg-dark-900 border border-slate-700 text-white text-sm focus:border-brand-500 transition" />
         </div>
-        <div>
-          <label className="text-sm text-slate-500">Alamat</label>
-          <input value={settings.address} onChange={e => setSettings({...settings, address: e.target.value})} className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900" />
+        <div className="p-4 border-b border-slate-700/50">
+          <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Alamat</label>
+          <input value={settings.address} onChange={e => setSettings({...settings, address:e.target.value})} className="w-full mt-2 px-4 py-3 rounded-xl bg-dark-900 border border-slate-700 text-white text-sm focus:border-brand-500 transition" />
         </div>
-        <div>
-          <label className="text-sm text-slate-500">Telepon</label>
-          <input value={settings.phone} onChange={e => setSettings({...settings, phone: e.target.value})} className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900" />
+        <div className="p-4">
+          <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Telepon</label>
+          <input value={settings.phone} onChange={e => setSettings({...settings, phone:e.target.value})} className="w-full mt-2 px-4 py-3 rounded-xl bg-dark-900 border border-slate-700 text-white text-sm focus:border-brand-500 transition" />
         </div>
       </div>
-      <button onClick={clearAll} className="w-full mt-4 py-3 rounded-xl bg-rose-100 text-rose-700 font-medium">🗑️ Hapus Semua Data</button>
+
+      <div className="bg-dark-800 rounded-2xl border border-slate-700/50 p-4 mb-4">
+        <h3 className="font-semibold text-sm mb-3 text-slate-300">Statistik Data</h3>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div><p className="text-lg font-bold text-white">{products.length}</p><p className="text-[10px] text-slate-400">Produk</p></div>
+          <div><p className="text-lg font-bold text-white">{transactions.length}</p><p className="text-[10px] text-slate-400">Transaksi</p></div>
+          <div><p className="text-lg font-bold text-white">{fmt(transactions.reduce((s,t)=>s+t.total,0))}</p><p className="text-[10px] text-slate-400">Omset</p></div>
+        </div>
+      </div>
+
+      <button onClick={resetAll} className="w-full py-3.5 rounded-2xl bg-rose-500/10 text-rose-400 font-semibold text-sm border border-rose-500/20">🗑 Hapus Semua Data</button>
     </div>
   );
 }
 
-// ==================== RECEIPT MODAL ====================
+// ============ RECEIPT MODAL ============
 function ReceiptModal({ receipt, settings, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg max-w-xs w-full shadow-2xl">
-        <div id="print-receipt" className="p-4 thermal-font text-xs">
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 no-print">
+      <div className="bg-white rounded-2xl max-w-xs w-full shadow-2xl overflow-hidden animate-fade-up">
+        <div id="receipt-print" className="p-5 text-slate-900" style={{fontFamily:'monospace', fontSize:'13px', lineHeight:'1.5'}}>
           <div className="text-center mb-3">
-            <p className="font-bold text-sm">{settings.storeName}</p>
-            <p>{settings.address}</p>
-            <p>{settings.phone}</p>
-            <p className="mt-1">{receipt.date} {receipt.time}</p>
+            <p className="font-bold text-base">{settings.store}</p>
+            <p className="text-xs text-slate-500">{settings.address}</p>
+            <p className="text-xs text-slate-500">{settings.phone}</p>
+            <p className="text-xs text-slate-400 mt-1">{receipt.date} {receipt.time}</p>
           </div>
-          <div className="border-t border-b border-dashed border-black py-2 my-2">
-            {receipt.items.map((item, i) => (
-              <div key={i} className="flex justify-between">
-                <span>{item.name} x{item.qty}</span>
-                <span>{fmt(item.price * item.qty)}</span>
+          <div className="border-t border-b border-dashed border-slate-300 py-2 my-2 space-y-1">
+            {receipt.items.map((it, i) => (
+              <div key={i} className="flex justify-between text-xs">
+                <span>{it.name} x{it.qty}</span>
+                <span className="font-medium">{fmt(it.price * it.qty)}</span>
               </div>
             ))}
           </div>
-          <div className="space-y-1">
-            <div className="flex justify-between font-bold"><span>TOTAL</span><span>{fmt(receipt.total)}</span></div>
-            <div className="flex justify-between"><span>Bayar</span><span>{fmt(receipt.payment)}</span></div>
-            <div className="flex justify-between"><span>Kembali</span><span>{fmt(receipt.change)}</span></div>
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between font-bold text-base"><span>TOTAL</span><span>{fmt(receipt.total)}</span></div>
+            <div className="flex justify-between text-slate-600"><span>Bayar</span><span>{fmt(receipt.payment)}</span></div>
+            <div className="flex justify-between text-slate-600"><span>Kembali</span><span>{fmt(receipt.change)}</span></div>
           </div>
-          <p className="text-center mt-3">Terima Kasih!</p>
+          <p className="text-center text-xs text-slate-400 mt-4">Terima Kasih!</p>
         </div>
-        <div className="p-3 border-t flex gap-2 no-print">
-          <button onClick={() => window.print()} className="flex-1 py-2 rounded-lg bg-primary-500 text-white text-sm font-medium">🖨️ Print</button>
-          <button onClick={onClose} className="flex-1 py-2 rounded-lg bg-slate-200 text-slate-700 text-sm font-medium">Tutup</button>
+        <div className="p-4 border-t border-slate-100 flex gap-3 no-print bg-white">
+          <button onClick={() => window.print()} className="flex-1 py-3 rounded-xl bg-brand-500 text-white font-semibold text-sm shadow-lg shadow-brand-500/20">🖨️ Print</button>
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm">Tutup</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ==================== RENDER ====================
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
 </script>
