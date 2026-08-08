@@ -1,8 +1,10 @@
 name: Build APK
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -36,6 +38,19 @@ jobs:
           EOF
           npx cap add android
           npx cap copy
+      - name: Setup Icon
+        run: |
+          if [ -f icon.png ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
+            convert icon.png -resize 48x48 android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+            convert icon.png -resize 72x72 android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            convert icon.png -resize 96x96 android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            convert icon.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            convert icon.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            convert icon.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          fi
+      - name: Compile APK
+        run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
