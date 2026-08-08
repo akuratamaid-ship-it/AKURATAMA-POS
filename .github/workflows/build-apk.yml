@@ -28,7 +28,7 @@ jobs:
           cp -r *.css *.js assets/ www/ 2>/dev/null || true
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
-          npm install @capacitor-community/barcode-scanner
+          npm install @capacitor-community/barcode-scanner --legacy-peer-deps
           cat > capacitor.config.json << 'EOF'
           {
             "appId": "com.akuratama.pos",
