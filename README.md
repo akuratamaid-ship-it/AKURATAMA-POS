@@ -1,0 +1,2 @@
+# AKURATAMA-POS
+ Aplikasi POS offline AKURATAMA 
