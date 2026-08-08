@@ -79,6 +79,33 @@ tailwind.config = {
 </head>
 <body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
 <div id="root"></div>
+<!-- Tombol Scan Barcode Floating -->
+<div style="position:fixed; bottom:90px; right:16px; z-index:9999;">
+  <button onclick="window.scanBarcode()" style="width:56px; height:56px; background:#00d4aa; color:white; border:none; border-radius:50%; font-size:22px; box-shadow:0 4px 12px rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center;">
+    📷
+  </button>
+</div>
+
+<script>
+window.scanBarcode = async function() {
+  try {
+    const { BarcodeScanner } = await import('@capacitor-community/barcode-scanner');
+    const status = await BarcodeScanner.checkPermission({ force: true });
+    if (!status.granted) {
+      alert('Izin kamera diperlukan untuk scan barcode!');
+      return;
+    }
+    await BarcodeScanner.hideBackground();
+    const result = await BarcodeScanner.startScan();
+    if (result.hasContent) {
+      alert('Barcode: ' + result.content);
+    }
+    await BarcodeScanner.showBackground();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+};
+</script>  
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
