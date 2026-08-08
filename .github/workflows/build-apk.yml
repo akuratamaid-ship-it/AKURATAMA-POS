@@ -28,6 +28,7 @@ jobs:
           cp -r *.css *.js assets/ www/ 2>/dev/null || true
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
+          npm install @capacitor-community/barcode-scanner
           cat > capacitor.config.json << 'EOF'
           {
             "appId": "com.akuratama.pos",
@@ -37,7 +38,7 @@ jobs:
           }
           EOF
           npx cap add android
-          npx cap copy
+          npx cap sync
       - name: Setup Icon
         run: |
           if [ -f icon.png ]; then
