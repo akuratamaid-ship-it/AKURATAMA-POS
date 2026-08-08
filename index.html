@@ -1,0 +1,1763 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1e3a5f">
+<title>AKURATAMA POS v3</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter','sans-serif'], mono: ['Space Mono','monospace'] },
+      colors: {
+        primary: { 50:'#f0fdfa',100:'#ccfbf1',200:'#99f6e4',300:'#5eead4',400:'#2dd4bf',500:'#14b8a6',600:'#0d9488',700:'#0f766e',800:'#115e59',900:'#134e4a' },
+        brand: { 50:'#f0f9ff',100:'#e0f2fe',200:'#bae6fd',300:'#7dd3fc',400:'#38bdf8',500:'#0ea5e9',600:'#0284c7',700:'#0369a1',800:'#075985',900:'#1e3a5f' },
+        emerald: { 50:'#ecfdf5',100:'#d1fae5',200:'#a7f3d0',300:'#6ee7b7',400:'#34d399',500:'#10b981',600:'#059669',700:'#047857',800:'#065f46',900:'#064e3b' },
+        amber: { 50:'#fffbeb',100:'#fef3c7',200:'#fde68a',300:'#fcd34d',400:'#fbbf24',500:'#f59e0b',600:'#d97706',700:'#b45309',800:'#92400e',900:'#78350f' },
+        rose: { 50:'#fff1f2',100:'#ffe4e6',200:'#fecdd3',300:'#fda4af',400:'#fb7185',500:'#f43f5e',600:'#e11d48',700:'#be123c',800:'#9f1239',900:'#881337' },
+        slate: { 50:'#f8fafc',100:'#f1f5f9',200:'#e2e8f0',300:'#cbd5e1',400:'#94a3b8',500:'#64748b',600:'#475569',700:'#334155',800:'#1e293b',900:'#0f172a' }
+      }
+    }
+  }
+}
+</script>
+<style>
+  * { -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Inter', sans-serif; overscroll-behavior-y: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+  .fade-in { animation: fadeIn 0.25s ease-out; }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .slide-up { animation: slideUp 0.3s ease-out; }
+  @keyframes pulse-soft { 0%,100%{opacity:1} 50%{opacity:0.7} }
+  .pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+  .receipt-paper {
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+    position: relative;
+  }
+  .receipt-paper::before {
+    content: '';
+    position: absolute;
+    top: -8px; left: 0; right: 0;
+    height: 16px;
+    background: radial-gradient(circle, transparent 6px, #fff 6px);
+    background-size: 16px 16px;
+    background-position: -8px 0;
+  }
+  .receipt-paper::after {
+    content: '';
+    position: absolute;
+    bottom: -8px; left: 0; right: 0;
+    height: 16px;
+    background: radial-gradient(circle, transparent 6px, #fff 6px);
+    background-size: 16px 16px;
+    background-position: -8px 0;
+    transform: rotate(180deg);
+  }
+  @media print {
+    body * { visibility: hidden; }
+    #print-receipt, #print-receipt * { visibility: visible; }
+    #print-receipt { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
+    .no-print { display: none !important; }
+  }
+  .thermal-font { font-family: 'Space Mono', monospace; }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .receipt-editor-scroll::-webkit-scrollbar { width: 4px; }
+  .receipt-editor-scroll::-webkit-scrollbar-track { background: transparent; }
+  .receipt-editor-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+</style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100">
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ==================== UTILS ====================
+const uid = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+const fmt = (n) => new Intl.NumberFormat('id-ID').format(Math.round(n));
+const now = () => new Date().toISOString();
+const today = () => new Date().toISOString().split('T')[0];
+const timeStr = () => new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+const LS = {
+  get: (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set: (k, v) => localStorage.setItem(k, JSON.stringify(v)),
+};
+
+const STORAGE_KEYS = {
+  products: 'akv3:products',
+  transactions: 'akv3:transactions',
+  receipt: 'akv3:receipt',
+  settings: 'akv3:settings',
+  darkMode: 'akv3:darkMode',
+  cart: 'akv3:cart',
+  heldOrders: 'akv3:heldOrders',
+};
+
+// ==================== SAMPLE DATA ====================
+const SAMPLE_PRODUCTS = [
+  { id: uid(), name: 'Beras Premium 5kg', price: 65000, cost: 55000, stock: 24, category: 'Sembako', expiry: '2027-03-15' },
+  { id: uid(), name: 'Minyak Goreng 2L', price: 28000, cost: 24000, stock: 36, category: 'Sembako', expiry: '2026-12-20' },
+  { id: uid(), name: 'Gula Pasir 1kg', price: 14500, cost: 12000, stock: 50, category: 'Sembako', expiry: '2027-01-10' },
+  { id: uid(), name: 'Telur Ayam 1kg', price: 27000, cost: 22000, stock: 18, category: 'Sembako', expiry: '2026-08-15' },
+  { id: uid(), name: 'Indomie Goreng', price: 3500, cost: 2800, stock: 120, category: 'Makanan', expiry: '2027-06-30' },
+  { id: uid(), name: 'Kopi Kapal Api', price: 12000, cost: 9500, stock: 45, category: 'Minuman', expiry: '2027-02-28' },
+  { id: uid(), name: 'Sabun Lifebuoy', price: 5500, cost: 4200, stock: 60, category: 'Kebutuhan', expiry: '2028-01-15' },
+  { id: uid(), name: 'Shampoo Clear 70ml', price: 8500, cost: 6800, stock: 40, category: 'Kebutuhan', expiry: '2027-09-20' },
+  { id: uid(), name: 'Tissue Paseo 250s', price: 11000, cost: 8500, stock: 30, category: 'Kebutuhan', expiry: '2029-05-10' },
+  { id: uid(), name: 'Aqua 600ml', price: 4000, cost: 2800, stock: 72, category: 'Minuman', expiry: '2026-11-30' },
+  { id: uid(), name: 'Chitato 68g', price: 9500, cost: 7500, stock: 28, category: 'Makanan', expiry: '2026-10-15' },
+  { id: uid(), name: 'Beng-beng', price: 2500, cost: 1900, stock: 80, category: 'Makanan', expiry: '2027-04-20' },
+];
+
+const DEFAULT_RECEIPT = {
+  storeName: 'TOKO AKURATAMA',
+  storeAddress: 'Jl. Merdeka No. 123, Jakarta',
+  storePhone: '0812-3456-7890',
+  storeEmail: 'akuratama@email.com',
+  storeWebsite: 'www.akuratama.id',
+  taxId: 'NPWP: 09.123.456.7-123.000',
+  logoText: 'AKURATAMA',
+  logoStyle: 'hexagon',
+  footerMessage: 'Terima kasih telah berbelanja\nBarang yang sudah dibeli tidak dapat ditukar/dikembalikan\nSemoga harimu menyenangkan!',
+  showLogo: true,
+  showAddress: true,
+  showPhone: true,
+  showEmail: false,
+  showWebsite: false,
+  showTaxId: false,
+  showCashier: true,
+  showTimestamp: true,
+  showTransactionId: true,
+  showCostPrice: false,
+  showProfit: false,
+  showBarcode: true,
+  showQrCode: false,
+  paperWidth: '58mm',
+  fontSize: 'normal',
+  fontFamily: 'mono',
+  headerStyle: 'center',
+  separatorStyle: 'dash',
+  itemLayout: 'compact',
+  theme: 'clean',
+};
+
+const DEFAULT_SETTINGS = {
+  taxRate: 11,
+  defaultDiscount: 0,
+  currency: 'Rp',
+  cashierName: 'Admin',
+  autoPrint: false,
+  soundEnabled: true,
+};
+
+// ==================== LOGO SVG COMPONENT ====================
+const LogoSVG = ({ size = 40, className = '', showText = true, showTagline = false, dark = false }) => {
+  const hexSize = size * 0.45;
+  const hexPoints = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i - Math.PI / 2;
+    hexPoints.push(`${hexSize * Math.cos(angle) + size/2},${hexSize * Math.sin(angle) + size/2}`);
+  }
+
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+        <circle cx={size/2} cy={size/2} r={size/2 - 1} fill={dark ? '#0f172a' : '#1e3a5f'} opacity="0.15"/>
+        <polygon points={hexPoints.join(' ')} fill="#14b8a6" stroke="#0d9488" strokeWidth="1"/>
+        <polyline 
+          points={`${size*0.32},${size*0.48} ${size*0.44},${size*0.62} ${size*0.68},${size*0.36}`}
+          fill="none" stroke="white" strokeWidth={size*0.08} strokeLinecap="round" strokeLinejoin="round"
+        />
+        <rect x={size*0.35} y={size*0.72} width={size*0.08} height={size*0.12} rx={size*0.02} fill="white"/>
+        <rect x={size*0.46} y={size*0.72} width={size*0.08} height={size*0.12} rx={size*0.02} fill="white"/>
+        <rect x={size*0.57} y={size*0.72} width={size*0.08} height={size*0.12} rx={size*0.02} fill="white" opacity="0.6"/>
+      </svg>
+      {showText && (
+        <div className="flex flex-col leading-none">
+          <span className="font-extrabold text-lg tracking-wide text-brand-900 dark:text-white" style={{letterSpacing:'0.08em'}}>AKURATAMA</span>
+          {showTagline && (
+            <span className="text-[9px] text-slate-500 dark:text-slate-400 tracking-wide">Solusi Stok Opname & POS Terpercaya</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==================== ICONS ====================
+const Icon = ({ name, size = 20, className = '' }) => {
+  const icons = {
+    home: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+    cart: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>,
+    box: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
+    chart: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+    settings: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+    receipt: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+    moon: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
+    sun: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
+    plus: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+    minus: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+    trash: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
+    search: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+    close: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+    check: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+    edit: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+    print: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
+    download: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+    upload: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+    pause: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>,
+    play: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
+    filter: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
+    alert: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+    barcode: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 6h20v12H2z"/><path d="M6 6v12"/><path d="M10 6v12"/><path d="M14 6v12"/><path d="M18 6v12"/></svg>,
+    qrcode: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+    eye: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
+    eyeOff: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>,
+    layout: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>,
+    palette: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.01 17.461 2 12 2z"/></svg>,
+    save: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
+    undo: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>,
+    copy: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
+    refresh: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>,
+    arrowLeft: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>,
+    arrowRight: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
+    dollar: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+    percent: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>,
+    tag: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+    user: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+    calendar: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+    clock: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+    info: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
+    star: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+    heart: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
+    grid: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+    list: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
+    package: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
+    shield: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+    zap: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+    trendingUp: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+    wallet: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12V8H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4h-4a2 2 0 0 1 0-4h4z"/><path d="M4 6V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/></svg>,
+    creditCard: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
+    smartphone: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>,
+    banknote: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>,
+    moreHorizontal: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>,
+    hash: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>,
+    alignLeft: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>,
+    alignCenter: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>,
+    type: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>,
+    maximize: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>,
+    minimize: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>,
+  };
+  return <span className={className}>{icons[name] || null}</span>;
+};
+
+// ==================== BASE COMPONENTS ====================
+const Button = ({ children, onClick, variant = 'primary', size = 'md', className = '', disabled = false, icon = null }) => {
+  const variants = {
+    primary: 'bg-primary-600 hover:bg-primary-700 text-white shadow-sm',
+    secondary: 'bg-slate-200 hover:bg-slate-300 text-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100',
+    outline: 'border-2 border-slate-300 hover:border-primary-500 text-slate-700 dark:border-slate-600 dark:text-slate-300 dark:hover:border-primary-400',
+    ghost: 'hover:bg-slate-100 text-slate-600 dark:hover:bg-slate-800 dark:text-slate-400',
+    danger: 'bg-rose-500 hover:bg-rose-600 text-white',
+    success: 'bg-emerald-500 hover:bg-emerald-600 text-white',
+    warning: 'bg-amber-500 hover:bg-amber-600 text-white',
+    brand: 'bg-brand-900 hover:bg-brand-800 text-white shadow-sm',
+  };
+  const sizes = { sm: 'px-2 py-1 text-xs', md: 'px-3 py-2 text-sm', lg: 'px-4 py-3 text-base' };
+  return (
+    <button onClick={onClick} disabled={disabled}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}>
+      {icon && <span className="opacity-80">{icon}</span>}
+      {children}
+    </button>
+  );
+};
+
+const Input = ({ label, type = 'text', value, onChange, placeholder = '', className = '', suffix = null, rows = null }) => (
+  <div className={className}>
+    {label && <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{label}</label>}
+    <div className="relative">
+      {rows ? (
+        <textarea value={value} onChange={onChange} placeholder={placeholder} rows={rows}
+          className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white resize-none" />
+      ) : (
+        <input type={type} value={value} onChange={onChange} placeholder={placeholder}
+          className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all dark:text-white" />
+      )}
+      {suffix && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">{suffix}</span>}
+    </div>
+  </div>
+);
+
+const Toggle = ({ label, checked, onChange }) => (
+  <label className="flex items-center justify-between cursor-pointer py-1">
+    <span className="text-sm text-slate-700 dark:text-slate-300">{label}</span>
+    <div onClick={() => onChange(!checked)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-primary-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+    </div>
+  </label>
+);
+
+const Card = ({ children, className = '', onClick }) => (
+  <div onClick={onClick} className={`bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 ${onClick ? 'cursor-pointer active:scale-[0.98] transition-transform' : ''} ${className}`}>
+    {children}
+  </div>
+);
+
+const Badge = ({ children, color = 'blue', className = '' }) => {
+  const colors = {
+    blue: 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
+    green: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    red: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
+    amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    slate: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+    brand: 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300',
+  };
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${colors[color]} ${className}`}>{children}</span>;
+};
+
+const Modal = ({ isOpen, onClose, title, children, size = 'md' }) => {
+  if (!isOpen) return null;
+  const sizes = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl', '2xl': 'max-w-2xl', full: 'max-w-full mx-4' };
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className={`relative bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full ${sizes[size]} max-h-[90vh] overflow-hidden slide-up`} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <h3 className="font-semibold text-slate-800 dark:text-white">{title}</h3>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+        <div className="overflow-y-auto max-h-[70vh] p-4">{children}</div>
+      </div>
+    </div>
+  );
+};
+
+const Toast = ({ message, type = 'success', onClose }) => {
+  useEffect(() => { const t = setTimeout(onClose, 2500); return () => clearTimeout(t); }, [onClose]);
+  const colors = { success: 'bg-emerald-500', error: 'bg-rose-500', info: 'bg-primary-500', warning: 'bg-amber-500' };
+  return (
+    <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] ${colors[type]} text-white px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium fade-in flex items-center gap-2`}>
+      <Icon name={type === 'success' ? 'check' : type === 'error' ? 'alert' : 'info'} size={16} />
+      {message}
+    </div>
+  );
+};
+
+// ==================== RECEIPT RENDERER ====================
+const ReceiptPreview = ({ receipt, transaction, settings, isPrint = false }) => {
+  const r = receipt;
+  const t = transaction;
+  const s = settings;
+
+  const widthClass = r.paperWidth === '80mm' ? 'w-[320px]' : 'w-[240px]';
+  const fontClass = r.fontFamily === 'mono' ? 'thermal-font' : 'font-sans';
+  const sizeClass = r.fontSize === 'small' ? 'text-[10px]' : r.fontSize === 'large' ? 'text-sm' : 'text-xs';
+  const alignClass = r.headerStyle === 'center' ? 'text-center' : 'text-left';
+
+  const sep = r.separatorStyle === 'dash' ? '─'.repeat(r.paperWidth === '80mm' ? 40 : 28) 
+    : r.separatorStyle === 'dot' ? '·'.repeat(r.paperWidth === '80mm' ? 60 : 40)
+    : r.separatorStyle === 'line' ? '━'.repeat(r.paperWidth === '80mm' ? 30 : 20)
+    : '';
+
+  const logoDisplay = () => {
+    if (!r.showLogo) return null;
+    if (r.logoStyle === 'none') return null;
+    if (r.logoStyle === 'hexagon') {
+      const hs = r.fontSize === 'small' ? 14 : r.fontSize === 'large' ? 22 : 18;
+      const hexPoints = [];
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i - Math.PI / 2;
+        hexPoints.push(`${hs * Math.cos(angle) + hs/2 + 2},${hs * Math.sin(angle) + hs/2 + 2}`);
+      }
+      return (
+        <div className="flex flex-col items-center gap-1">
+          <svg width={hs+4} height={hs+4} viewBox={`0 0 ${hs+4} ${hs+4}`}>
+            <polygon points={hexPoints.join(' ')} fill="#14b8a6" stroke="#0d9488" strokeWidth="0.5"/>
+            <polyline points={`${hs*0.32+2},${hs*0.48+2} ${hs*0.44+2},${hs*0.62+2} ${hs*0.68+2},${hs*0.36+2}`}
+              fill="none" stroke="white" strokeWidth={hs*0.08} strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <div className="font-extrabold tracking-wider" style={{fontSize: r.fontSize==='small'?10:r.fontSize==='large'?16:12}}>AKURATAMA</div>
+        </div>
+      );
+    }
+    if (r.logoStyle === 'star') return <div className="text-lg leading-tight">{r.logoText}</div>;
+    if (r.logoStyle === 'box') return <div className="border-2 border-current inline-block px-2 py-0.5 text-sm font-bold tracking-wider">{r.storeName}</div>;
+    return <div className="text-base font-bold tracking-wide">{r.logoText}</div>;
+  };
+
+  const txId = t?.id ? t.id.slice(-8).toUpperCase() : 'DEMO1234';
+  const txDate = t?.date ? new Date(t.date).toLocaleDateString('id-ID') : new Date().toLocaleDateString('id-ID');
+  const txTime = t?.date ? new Date(t.date).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}) : timeStr();
+
+  return (
+    <div id={isPrint ? "print-receipt" : ""} 
+      className={`receipt-paper ${widthClass} ${fontClass} ${sizeClass} ${alignClass} mx-auto p-4 text-slate-900 bg-white`}
+      style={{ color: '#000', background: '#fff' }}>
+
+      {/* Logo */}
+      <div className="mb-2">{logoDisplay()}</div>
+
+      {/* Store Info */}
+      {r.showAddress && r.storeAddress && <div className="mb-0.5">{r.storeAddress}</div>}
+      {r.showPhone && r.storePhone && <div className="mb-0.5">Telp: {r.storePhone}</div>}
+      {r.showEmail && r.storeEmail && <div className="mb-0.5">{r.storeEmail}</div>}
+      {r.showWebsite && r.storeWebsite && <div className="mb-0.5">{r.storeWebsite}</div>}
+      {r.showTaxId && r.taxId && <div className="mb-0.5">{r.taxId}</div>}
+
+      {sep && <div className="my-1.5 opacity-60">{sep}</div>}
+
+      {/* Transaction Info */}
+      {r.showTransactionId && <div className="text-left flex justify-between"><span>No:</span><span>{txId}</span></div>}
+      {r.showTimestamp && (
+        <>
+          <div className="text-left flex justify-between"><span>Tgl:</span><span>{txDate}</span></div>
+          <div className="text-left flex justify-between"><span>Jam:</span><span>{txTime}</span></div>
+        </>
+      )}
+      {r.showCashier && <div className="text-left flex justify-between"><span>Kasir:</span><span>{t?.cashier || s.cashierName}</span></div>}
+
+      {sep && <div className="my-1.5 opacity-60">{sep}</div>}
+
+      {/* Items */}
+      {t?.items ? (
+        t.items.map((item, i) => (
+          <div key={i} className="text-left mb-1">
+            <div className="flex justify-between">
+              <span className="truncate pr-1" style={{maxWidth: r.paperWidth==='80mm'?'200px':'140px'}}>{item.name}</span>
+              <span>{fmt(item.price * item.qty)}</span>
+            </div>
+            {r.itemLayout === 'detailed' && (
+              <div className="flex justify-between text-[10px] opacity-70">
+                <span>{item.qty} x {fmt(item.price)}</span>
+                {r.showCostPrice && item.cost && <span>Modal: {fmt(item.cost)}</span>}
+              </div>
+            )}
+            {r.itemLayout === 'detailed' && item.discount > 0 && (
+              <div className="text-[10px] opacity-70">Disc: -{fmt(item.discount)}</div>
+            )}
+            {r.showProfit && item.cost && (
+              <div className="text-[10px] opacity-60">Profit: {fmt((item.price - item.cost) * item.qty)}</div>
+            )}
+          </div>
+        ))
+      ) : (
+        <>
+          <div className="flex justify-between"><span>Beras Premium 5kg</span><span>65.000</span></div>
+          <div className="text-[10px] opacity-70">1 x 65.000</div>
+          <div className="flex justify-between mt-1"><span>Minyak Goreng 2L</span><span>28.000</span></div>
+          <div className="text-[10px] opacity-70">1 x 28.000</div>
+          <div className="flex justify-between mt-1"><span>Indomie Goreng</span><span>7.000</span></div>
+          <div className="text-[10px] opacity-70">2 x 3.500</div>
+        </>
+      )}
+
+      {sep && <div className="my-1.5 opacity-60">{sep}</div>}
+
+      {/* Summary */}
+      <div className="text-left">
+        <div className="flex justify-between"><span>Subtotal</span><span>{fmt(t?.subtotal || 100000)}</span></div>
+        {(t?.discount > 0 || (!t && true)) && (
+          <div className="flex justify-between"><span>Diskon</span><span>-{fmt(t?.discount || 5000)}</span></div>
+        )}
+        {(t?.tax > 0 || (!t && true)) && (
+          <div className="flex justify-between"><span>PPN ({s.taxRate}%)</span><span>{fmt(t?.tax || 11000)}</span></div>
+        )}
+        <div className="flex justify-between font-bold text-sm mt-1 pt-1 border-t border-dashed border-slate-400">
+          <span>TOTAL</span><span>{fmt(t?.total || 106000)}</span>
+        </div>
+      </div>
+
+      {sep && <div className="my-1.5 opacity-60">{sep}</div>}
+
+      {/* Payment */}
+      <div className="text-left">
+        <div className="flex justify-between"><span>Metode</span><span>{t?.paymentMethod || 'Tunai'}</span></div>
+        <div className="flex justify-between"><span>Bayar</span><span>{fmt(t?.paid || 110000)}</span></div>
+        <div className="flex justify-between font-bold"><span>Kembali</span><span>{fmt(t?.change || 4000)}</span></div>
+      </div>
+
+      {sep && <div className="my-1.5 opacity-60">{sep}</div>}
+
+      {/* Barcode / QR */}
+      {r.showBarcode && (
+        <div className="my-2">
+          <div className="flex justify-center gap-0.5">
+            {Array.from(txId).map((c, i) => (
+              <div key={i} className="flex flex-col items-center">
+                <div className="w-1 h-6 bg-slate-900" style={{height: i % 2 === 0 ? '24px' : '16px', width: i % 3 === 0 ? '2px' : '1px'}}></div>
+              </div>
+            ))}
+          </div>
+          <div className="text-[9px] tracking-[0.3em] mt-0.5">{txId}</div>
+        </div>
+      )}
+
+      {r.showQrCode && (
+        <div className="flex justify-center my-2">
+          <div className="w-16 h-16 border border-slate-900 p-1">
+            <div className="w-full h-full grid grid-cols-4 grid-rows-4 gap-0.5">
+              {Array.from({length:16}).map((_,i) => (
+                <div key={i} className={`${[0,1,2,3,4,7,8,12,13,14,15].includes(i) ? 'bg-slate-900' : 'bg-white'}`}></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      {r.footerMessage && (
+        <div className="mt-2 text-center whitespace-pre-line text-[10px] opacity-80 leading-relaxed">
+          {r.footerMessage}
+        </div>
+      )}
+
+      <div className="mt-3 text-[9px] opacity-50 text-center">
+        *** AKURATAMA POS v3 ***
+      </div>
+    </div>
+  );
+};
+
+// ==================== RECEIPT EDITOR ====================
+const ReceiptEditor = ({ receipt, setReceipt, onClose, onSave, settings }) => {
+  const [local, setLocal] = useState({ ...receipt });
+  const [activeTab, setActiveTab] = useState('info');
+  const [previewTx] = useState({
+    id: uid(),
+    date: now(),
+    cashier: settings.cashierName,
+    items: [
+      { name: 'Beras Premium 5kg', price: 65000, cost: 55000, qty: 1, discount: 0 },
+      { name: 'Minyak Goreng 2L', price: 28000, cost: 24000, qty: 1, discount: 0 },
+      { name: 'Indomie Goreng', price: 3500, cost: 2800, qty: 2, discount: 0 },
+    ],
+    subtotal: 100000,
+    discount: 5000,
+    tax: 11000,
+    total: 106000,
+    paid: 110000,
+    change: 4000,
+    paymentMethod: 'Tunai',
+  });
+
+  const update = (key, val) => setLocal(prev => ({ ...prev, [key]: val }));
+
+  const handleSave = () => {
+    setReceipt(local);
+    LS.set(STORAGE_KEYS.receipt, local);
+    onSave && onSave();
+    onClose();
+  };
+
+  const handleReset = () => {
+    if (confirm('Reset ke template default?')) {
+      setLocal({ ...DEFAULT_RECEIPT });
+    }
+  };
+
+  const tabs = [
+    { id: 'info', label: 'Info Toko', icon: 'home' },
+    { id: 'display', label: 'Tampilan', icon: 'layout' },
+    { id: 'content', label: 'Konten', icon: 'list' },
+    { id: 'style', label: 'Gaya', icon: 'palette' },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-100 dark:bg-slate-900">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0">
+        <div className="flex items-center gap-3">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+            <Icon name="arrowLeft" size={20} />
+          </button>
+          <div>
+            <h2 className="font-bold text-slate-800 dark:text-white">Editor Struk</h2>
+            <p className="text-xs text-slate-500">Kustomisasi tampilan struk belanja</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={handleReset} icon={<Icon name="refresh" size={14} />}>Reset</Button>
+          <Button variant="primary" size="sm" onClick={handleSave} icon={<Icon name="save" size={14} />}>Simpan</Button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 px-4 py-2 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 overflow-x-auto no-scrollbar shrink-0">
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setActiveTab(t.id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+              activeTab === t.id 
+                ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' 
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}>
+            <Icon name={t.icon} size={14} />
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+        {/* Editor Panel */}
+        <div className="flex-1 overflow-y-auto p-4 receipt-editor-scroll">
+          {activeTab === 'info' && (
+            <div className="space-y-4 max-w-md">
+              <Card className="p-4">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+                  <Icon name="home" size={16} className="text-primary-500" /> Informasi Toko
+                </h3>
+                <div className="space-y-3">
+                  <Input label="Nama Toko" value={local.storeName} onChange={e => update('storeName', e.target.value)} />
+                  <Input label="Alamat" value={local.storeAddress} onChange={e => update('storeAddress', e.target.value)} />
+                  <Input label="No. Telepon" value={local.storePhone} onChange={e => update('storePhone', e.target.value)} />
+                  <Input label="Email" value={local.storeEmail} onChange={e => update('storeEmail', e.target.value)} />
+                  <Input label="Website" value={local.storeWebsite} onChange={e => update('storeWebsite', e.target.value)} />
+                  <Input label="NPWP / Tax ID" value={local.taxId} onChange={e => update('taxId', e.target.value)} />
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+                  <Icon name="star" size={16} className="text-amber-500" /> Logo & Branding
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Gaya Logo</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'hexagon', label: 'Hexagon', preview: <LogoSVG size={24} showText={false} /> },
+                        { id: 'star', label: 'Bintang', preview: <span className="text-lg">★</span> },
+                        { id: 'box', label: 'Kotak', preview: <span className="text-lg border-2 border-current px-1">▣</span> },
+                        { id: 'simple', label: 'Teks', preview: <span className="text-xs font-bold">AK</span> },
+                        { id: 'none', label: 'Sembunyi', preview: <span className="text-xs text-slate-400">-</span> },
+                      ].map(style => (
+                        <button key={style.id} onClick={() => update('logoStyle', style.id)}
+                          className={`p-2 rounded-lg border-2 text-center text-xs transition-all ${
+                            local.logoStyle === style.id 
+                              ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300' 
+                              : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400'
+                          }`}>
+                          <div className="h-6 flex items-center justify-center mb-1">{style.preview}</div>
+                          {style.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {local.logoStyle !== 'none' && local.logoStyle !== 'hexagon' && local.logoStyle !== 'box' && (
+                    <Input label="Teks Logo" value={local.logoText} onChange={e => update('logoText', e.target.value)} />
+                  )}
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+                  <Icon name="heart" size={16} className="text-rose-500" /> Pesan Footer
+                </h3>
+                <Input label="Footer Struk" value={local.footerMessage} onChange={e => update('footerMessage', e.target.value)} 
+                  placeholder="Baris baru = enter" rows={4} />
+                <p className="text-[10px] text-slate-400 mt-1">Gunakan Enter untuk baris baru</p>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === 'display' && (
+            <div className="space-y-4 max-w-md">
+              <Card className="p-4">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-3">Elemen Tampilan</h3>
+                <div className="space-y-1">
+                  <Toggle label="Tampilkan Logo" checked={local.showLogo} onChange={v => update('showLogo', v)} />
+                  <Toggle label="Tampilkan Alamat" checked={local.showAddress} onChange={v => update('showAddress', v)} />
+                  <Toggle label="Tampilkan Telepon" checked={local.showPhone} onChange={v => update('showPhone', v)} />
+                  <Toggle label="Tampilkan Email" checked={local.showEmail} onChange={v => update('showEmail', v)} />
+                  <Toggle label="Tampilkan Website" checked={local.showWebsite} onChange={v => update('showWebsite', v)} />
+                  <Toggle label="Tampilkan NPWP/Tax ID" checked={local.showTaxId} onChange={v => update('showTaxId', v)} />
+                  <Toggle label="Tampilkan Nama Kasir" checked={local.showCashier} onChange={v => update('showCashier', v)} />
+                  <Toggle label="Tampilkan Tanggal & Jam" checked={local.showTimestamp} onChange={v => update('showTimestamp', v)} />
+                  <Toggle label="Tampilkan No. Transaksi" checked={local.showTransactionId} onChange={v => update('showTransactionId', v)} />
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-3">Info Detail Item</h3>
+                <div className="space-y-1">
+                  <Toggle label="Tampilkan Harga Modal" checked={local.showCostPrice} onChange={v => update('showCostPrice', v)} />
+                  <Toggle label="Tampilkan Profit per Item" checked={local.showProfit} onChange={v => update('showProfit', v)} />
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-3">Kode & Barcode</h3>
+                <div className="space-y-1">
+                  <Toggle label="Tampilkan Barcode Transaksi" checked={local.showBarcode} onChange={v => update('showBarcode', v)} />
+                  <Toggle label="Tampilkan QR Code" checked={local.showQrCode} onChange={v => update('showQrCode', v)} />
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === 'content' && (
+            <div className="space-y-4 max-w-md">
+              <Card className="p-4">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-3">Layout Item</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'compact', label: 'Ringkas', desc: 'Nama + Total' },
+                    { id: 'detailed', label: 'Detail', desc: 'Nama + Qty x Harga + Total' },
+                  ].map(opt => (
+                    <button key={opt.id} onClick={() => update('itemLayout', opt.id)}
+                      className={`p-3 rounded-lg border-2 text-left transition-all ${
+                        local.itemLayout === opt.id 
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' 
+                          : 'border-slate-200 dark:border-slate-600'
+                      }`}>
+                      <div className="font-medium text-sm text-slate-800 dark:text-white">{opt.label}</div>
+                      <div className="text-[10px] text-slate-500">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-3">Garis Pemisah</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'dash', label: 'Putus-putus', preview: '────────' },
+                    { id: 'line', label: 'Solid', preview: '━━━━━━━━' },
+                    { id: 'dot', label: 'Titik', preview: '········' },
+                    { id: 'none', label: 'Tanpa Garis', preview: '' },
+                  ].map(opt => (
+                    <button key={opt.id} onClick={() => update('separatorStyle', opt.id)}
+                      className={`p-3 rounded-lg border-2 text-left transition-all ${
+                        local.separatorStyle === opt.id 
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' 
+                          : 'border-slate-200 dark:border-slate-600'
+                      }`}>
+                      <div className="font-medium text-sm text-slate-800 dark:text-white">{opt.label}</div>
+                      <div className="text-[10px] text-slate-500 font-mono mt-1">{opt.preview}</div>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === 'style' && (
+            <div className="space-y-4 max-w-md">
+              <Card className="p-4">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-3">Ukuran Kertas</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: '58mm', label: '58mm', desc: 'Printer thermal kecil' },
+                    { id: '80mm', label: '80mm', desc: 'Printer thermal besar' },
+                  ].map(opt => (
+                    <button key={opt.id} onClick={() => update('paperWidth', opt.id)}
+                      className={`p-3 rounded-lg border-2 text-left transition-all ${
+                        local.paperWidth === opt.id 
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' 
+                          : 'border-slate-200 dark:border-slate-600'
+                      }`}>
+                      <div className="font-medium text-sm text-slate-800 dark:text-white">{opt.label}</div>
+                      <div className="text-[10px] text-slate-500">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-3">Ukuran Font</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'small', label: 'Kecil', sample: 'Aa' },
+                    { id: 'normal', label: 'Normal', sample: 'Aa' },
+                    { id: 'large', label: 'Besar', sample: 'Aa' },
+                  ].map(opt => (
+                    <button key={opt.id} onClick={() => update('fontSize', opt.id)}
+                      className={`p-3 rounded-lg border-2 text-center transition-all ${
+                        local.fontSize === opt.id 
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' 
+                          : 'border-slate-200 dark:border-slate-600'
+                      }`}>
+                      <div className={`font-bold text-slate-800 dark:text-white ${opt.id === 'small' ? 'text-xs' : opt.id === 'large' ? 'text-lg' : 'text-sm'}`}>{opt.sample}</div>
+                      <div className="text-[10px] text-slate-500 mt-1">{opt.label}</div>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-3">Jenis Font</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'mono', label: 'Monospace', desc: 'Cocok printer thermal', family: 'font-mono' },
+                    { id: 'sans', label: 'Sans-serif', desc: 'Modern & bersih', family: 'font-sans' },
+                  ].map(opt => (
+                    <button key={opt.id} onClick={() => update('fontFamily', opt.id)}
+                      className={`p-3 rounded-lg border-2 text-left transition-all ${
+                        local.fontFamily === opt.id 
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' 
+                          : 'border-slate-200 dark:border-slate-600'
+                      }`}>
+                      <div className={`font-medium text-sm text-slate-800 dark:text-white ${opt.family}`}>{opt.label}</div>
+                      <div className="text-[10px] text-slate-500">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <h3 className="font-semibold text-slate-800 dark:text-white mb-3">Align Header</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'center', label: 'Tengah', icon: 'alignCenter' },
+                    { id: 'left', label: 'Kiri', icon: 'alignLeft' },
+                  ].map(opt => (
+                    <button key={opt.id} onClick={() => update('headerStyle', opt.id)}
+                      className={`p-3 rounded-lg border-2 flex items-center gap-2 transition-all ${
+                        local.headerStyle === opt.id 
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' 
+                          : 'border-slate-200 dark:border-slate-600'
+                      }`}>
+                      <Icon name={opt.icon} size={16} />
+                      <span className="font-medium text-sm text-slate-800 dark:text-white">{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          )}
+        </div>
+
+        {/* Preview Panel */}
+        <div className="lg:w-[380px] bg-slate-200 dark:bg-slate-950 p-4 overflow-y-auto flex flex-col items-center shrink-0">
+          <div className="sticky top-0 bg-slate-200 dark:bg-slate-950 pb-2 w-full text-center z-10">
+            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1">Preview Struk</h3>
+            <p className="text-[10px] text-slate-400">Perubahan tersimpan otomatis di preview</p>
+          </div>
+          <div className="mt-2">
+            <ReceiptPreview receipt={local} transaction={previewTx} settings={settings} />
+          </div>
+          <div className="mt-4 flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => window.print()} icon={<Icon name="print" size={14} />}>Test Print</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== CASHIER SCREEN ====================
+const CashierScreen = ({ products, cart, setCart, heldOrders, setHeldOrders, receipt, settings, onCheckout, onOpenReceiptEditor }) => {
+  const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState('Semua');
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('Tunai');
+  const [paidAmount, setPaidAmount] = useState('');
+  const [discount, setDiscount] = useState(0);
+  const [discountType, setDiscountType] = useState('nominal');
+  const [toast, setToast] = useState(null);
+  const [showHeld, setShowHeld] = useState(false);
+
+  const categories = ['Semua', ...new Set(products.map(p => p.category))];
+  const filtered = products.filter(p => {
+    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    const matchCat = activeCategory === 'Semua' || p.category === activeCategory;
+    return matchSearch && matchCat;
+  });
+
+  const addToCart = (product) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === product.id);
+      if (existing) {
+        return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
+      }
+      return [...prev, { ...product, qty: 1, itemDiscount: 0 }];
+    });
+  };
+
+  const updateQty = (id, delta) => {
+    setCart(prev => prev.map(i => {
+      if (i.id !== id) return i;
+      const newQty = Math.max(1, i.qty + delta);
+      return { ...i, qty: newQty };
+    }).filter(i => i.qty > 0));
+  };
+
+  const removeFromCart = (id) => {
+    setCart(prev => prev.filter(i => i.id !== id));
+  };
+
+  const clearCart = () => setCart([]);
+
+  const holdOrder = () => {
+    if (cart.length === 0) return;
+    const held = { id: uid(), items: [...cart], date: now(), note: '' };
+    setHeldOrders(prev => [...prev, held]);
+    setCart([]);
+    setToast({ message: 'Pesanan ditahan', type: 'info' });
+  };
+
+  const resumeOrder = (held) => {
+    setCart(held.items);
+    setHeldOrders(prev => prev.filter(h => h.id !== held.id));
+    setShowHeld(false);
+    setToast({ message: 'Pesanan dilanjutkan', type: 'info' });
+  };
+
+  const subtotal = cart.reduce((sum, i) => sum + i.price * i.qty, 0);
+  const discAmount = discountType === 'percent' ? Math.round(subtotal * discount / 100) : discount;
+  const taxAmount = Math.round((subtotal - discAmount) * settings.taxRate / 100);
+  const total = subtotal - discAmount + taxAmount;
+  const change = Math.max(0, (parseInt(paidAmount) || 0) - total);
+
+  const handleCheckout = () => {
+    if (cart.length === 0) return;
+    const paid = parseInt(paidAmount) || total;
+    const tx = {
+      id: uid(),
+      date: now(),
+      items: cart.map(i => ({ ...i })),
+      subtotal,
+      discount: discAmount,
+      tax: taxAmount,
+      total,
+      paid,
+      change: paid - total,
+      paymentMethod,
+      cashier: settings.cashierName,
+    };
+    onCheckout(tx);
+    setCart([]);
+    setShowPayment(false);
+    setPaidAmount('');
+    setDiscount(0);
+    setToast({ message: 'Transaksi berhasil!', type: 'success' });
+  };
+
+  return (
+    <div className="h-full flex flex-col">
+      {toast && <Toast {...toast} onClose={() => setToast(null)} />}
+
+      {/* Search & Categories */}
+      <div className="px-4 pt-4 pb-2 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+        <div className="relative mb-3">
+          <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input type="text" placeholder="Cari produk..." value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 bg-slate-100 dark:bg-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 outline-none dark:text-white" />
+        </div>
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          {categories.map(cat => (
+            <button key={cat} onClick={() => setActiveCategory(cat)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                activeCategory === cat 
+                  ? 'bg-primary-500 text-white' 
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+              }`}>
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Products Grid */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {filtered.map(product => (
+            <button key={product.id} onClick={() => addToCart(product)}
+              className="bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-200 dark:border-slate-700 text-left active:scale-[0.97] transition-transform">
+              <div className="font-medium text-sm text-slate-800 dark:text-white line-clamp-2 min-h-[2.5rem]">{product.name}</div>
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-primary-600 dark:text-primary-400 font-bold text-sm">{fmt(product.price)}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ${product.stock <= 5 ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
+                  Stk: {product.stock}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Cart Summary */}
+      {cart.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 p-4 shadow-lg">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Badge color="blue">{cart.length} item</Badge>
+              {heldOrders.length > 0 && (
+                <button onClick={() => setShowHeld(true)}
+                  className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded-full">
+                  <Icon name="pause" size={12} /> {heldOrders.length} ditahan
+                </button>
+              )}
+            </div>
+            <div className="flex gap-1">
+              <button onClick={holdOrder} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500" title="Tahan Pesanan">
+                <Icon name="pause" size={16} />
+              </button>
+              <button onClick={clearCart} className="p-2 rounded-lg hover:bg-rose-100 text-rose-500" title="Kosongkan">
+                <Icon name="trash" size={16} />
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2 mb-3 max-h-32 overflow-y-auto">
+            {cart.map(item => (
+              <div key={item.id} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-2">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-slate-800 dark:text-white truncate">{item.name}</div>
+                  <div className="text-xs text-slate-500">{fmt(item.price)} x {item.qty}</div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => updateQty(item.id, -1)} className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-600 flex items-center justify-center">
+                    <Icon name="minus" size={14} />
+                  </button>
+                  <span className="w-8 text-center text-sm font-medium">{item.qty}</span>
+                  <button onClick={() => updateQty(item.id, 1)} className="w-7 h-7 rounded-lg bg-primary-500 text-white flex items-center justify-center">
+                    <Icon name="plus" size={14} />
+                  </button>
+                </div>
+                <div className="text-sm font-bold text-slate-800 dark:text-white min-w-[70px] text-right">{fmt(item.price * item.qty)}</div>
+                <button onClick={() => removeFromCart(item.id)} className="p-1 text-slate-400 hover:text-rose-500">
+                  <Icon name="trash" size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-xs text-slate-500">Total</div>
+              <div className="text-2xl font-bold text-slate-800 dark:text-white">{fmt(total)}</div>
+            </div>
+            <Button variant="primary" size="lg" onClick={() => setShowPayment(true)} icon={<Icon name="dollar" size={18} />}>
+              Bayar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Held Orders Modal */}
+      <Modal isOpen={showHeld} onClose={() => setShowHeld(false)} title="Pesanan Ditahan" size="md">
+        <div className="space-y-2">
+          {heldOrders.map(h => (
+            <Card key={h.id} className="p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-slate-800 dark:text-white">Pesanan #{h.id.slice(-6).toUpperCase()}</div>
+                  <div className="text-xs text-slate-500">{h.items.length} item · {new Date(h.date).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}</div>
+                </div>
+                <Button variant="success" size="sm" onClick={() => resumeOrder(h)} icon={<Icon name="play" size={14} />}>Lanjutkan</Button>
+              </div>
+            </Card>
+          ))}
+          {heldOrders.length === 0 && <div className="text-center text-sm text-slate-400 py-4">Tidak ada pesanan ditahan</div>}
+        </div>
+      </Modal>
+
+      {/* Payment Modal */}
+      <Modal isOpen={showPayment} onClose={() => setShowPayment(false)} title="Pembayaran" size="lg">
+        <div className="space-y-4">
+          <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4">
+            <div className="text-center">
+              <div className="text-sm text-slate-500">Total Pembayaran</div>
+              <div className="text-3xl font-bold text-slate-800 dark:text-white">{fmt(total)}</div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-2">Metode Pembayaran</label>
+            <div className="grid grid-cols-3 gap-2">
+              {['Tunai', 'QRIS', 'Transfer', 'E-Wallet', 'Debit', 'Kredit'].map(m => (
+                <button key={m} onClick={() => setPaymentMethod(m)}
+                  className={`p-2 rounded-lg border-2 text-xs font-medium transition-all ${
+                    paymentMethod === m 
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300' 
+                      : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400'
+                  }`}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Diskon</label>
+              <div className="flex">
+                <input type="number" value={discount} onChange={e => setDiscount(parseInt(e.target.value) || 0)}
+                  className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-l-lg text-sm dark:text-white outline-none" />
+                <button onClick={() => setDiscountType(discountType === 'nominal' ? 'percent' : 'nominal')}
+                  className="px-3 py-2 bg-slate-200 dark:bg-slate-600 rounded-r-lg text-xs font-medium">
+                  {discountType === 'nominal' ? 'Rp' : '%'}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Uang Diterima</label>
+              <input type="number" value={paidAmount} onChange={e => setPaidAmount(e.target.value)}
+                placeholder={total.toString()} className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm dark:text-white outline-none" />
+            </div>
+          </div>
+
+          {(parseInt(paidAmount) || 0) >= total && (
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 text-center">
+              <div className="text-sm text-emerald-600 dark:text-emerald-400">Kembalian</div>
+              <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{fmt(change)}</div>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setShowPayment(false)}>Batal</Button>
+            <Button variant="success" className="flex-1" onClick={handleCheckout} disabled={(parseInt(paidAmount) || 0) < total && paymentMethod === 'Tunai'}>
+              Konfirmasi Bayar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+};
+
+// ==================== PRODUCT MANAGER ====================
+const ProductManager = ({ products, setProducts }) => {
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState('');
+  const [form, setForm] = useState({ name: '', price: '', cost: '', stock: '', category: 'Sembako', expiry: '' });
+  const [toast, setToast] = useState(null);
+
+  const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+
+  const handleSubmit = () => {
+    if (!form.name || !form.price) return;
+    const data = {
+      id: editing ? editing.id : uid(),
+      name: form.name,
+      price: parseInt(form.price) || 0,
+      cost: parseInt(form.cost) || 0,
+      stock: parseInt(form.stock) || 0,
+      category: form.category,
+      expiry: form.expiry,
+    };
+    if (editing) {
+      setProducts(prev => prev.map(p => p.id === editing.id ? data : p));
+      setToast({ message: 'Produk diperbarui', type: 'success' });
+    } else {
+      setProducts(prev => [...prev, data]);
+      setToast({ message: 'Produk ditambahkan', type: 'success' });
+    }
+    setShowForm(false);
+    setEditing(null);
+    setForm({ name: '', price: '', cost: '', stock: '', category: 'Sembako', expiry: '' });
+  };
+
+  const handleEdit = (p) => {
+    setEditing(p);
+    setForm({ name: p.name, price: p.price, cost: p.cost, stock: p.stock, category: p.category, expiry: p.expiry });
+    setShowForm(true);
+  };
+
+  const handleDelete = (id) => {
+    if (confirm('Hapus produk ini?')) {
+      setProducts(prev => prev.filter(p => p.id !== id));
+      setToast({ message: 'Produk dihapus', type: 'info' });
+    }
+  };
+
+  const exportCSV = () => {
+    const headers = ['Nama,Harga Jual,Harga Modal,Stok,Kategori,Kadaluarsa'];
+    const rows = products.map(p => `"${p.name}",${p.price},${p.cost},${p.stock},"${p.category}","${p.expiry}"`);
+    const csv = [headers, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `produk_${today()}.csv`; a.click();
+    setToast({ message: 'CSV berhasil diexport', type: 'success' });
+  };
+
+  const lowStock = products.filter(p => p.stock <= 5);
+  const expiringSoon = products.filter(p => {
+    if (!p.expiry) return false;
+    const days = Math.ceil((new Date(p.expiry) - new Date()) / (1000 * 60 * 60 * 24));
+    return days <= 30 && days >= 0;
+  });
+
+  return (
+    <div className="h-full flex flex-col">
+      {toast && <Toast {...toast} onClose={() => setToast(null)} />}
+
+      <div className="px-4 pt-4 pb-2">
+        <div className="flex gap-2 mb-3">
+          <div className="relative flex-1">
+            <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input type="text" placeholder="Cari produk..." value={search} onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-800 rounded-xl text-sm border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-primary-500 outline-none dark:text-white" />
+          </div>
+          <Button onClick={() => { setEditing(null); setForm({ name: '', price: '', cost: '', stock: '', category: 'Sembako', expiry: '' }); setShowForm(true); }}
+            icon={<Icon name="plus" size={16} />}>Tambah</Button>
+          <Button variant="outline" onClick={exportCSV} icon={<Icon name="download" size={16} />}>CSV</Button>
+        </div>
+
+        {(lowStock.length > 0 || expiringSoon.length > 0) && (
+          <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar">
+            {lowStock.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 px-3 py-1.5 rounded-full text-xs whitespace-nowrap">
+                <Icon name="alert" size={12} /> {lowStock.length} stok menipis
+              </div>
+            )}
+            {expiringSoon.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 px-3 py-1.5 rounded-full text-xs whitespace-nowrap">
+                <Icon name="alert" size={12} /> {expiringSoon.length} akan kadaluarsa
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <div className="space-y-2">
+          {filtered.map(p => (
+            <Card key={p.id} className="p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm text-slate-800 dark:text-white">{p.name}</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge color="blue">{p.category}</Badge>
+                    <span className="text-xs text-slate-500">Stok: <span className={p.stock <= 5 ? 'text-rose-500 font-bold' : ''}>{p.stock}</span></span>
+                    {p.expiry && (
+                      <span className="text-[10px] text-slate-400">Exp: {p.expiry}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right mr-3">
+                  <div className="font-bold text-sm text-slate-800 dark:text-white">{fmt(p.price)}</div>
+                  <div className="text-[10px] text-slate-400">Modal: {fmt(p.cost)}</div>
+                </div>
+                <div className="flex gap-1">
+                  <button onClick={() => handleEdit(p)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500">
+                    <Icon name="edit" size={14} />
+                  </button>
+                  <button onClick={() => handleDelete(p.id)} className="p-2 rounded-lg hover:bg-rose-100 text-rose-500">
+                    <Icon name="trash" size={14} />
+                  </button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editing ? 'Edit Produk' : 'Tambah Produk'}>
+        <div className="space-y-3">
+          <Input label="Nama Produk" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Harga Jual" type="number" value={form.price} onChange={e => setForm({...form, price: e.target.value})} />
+            <Input label="Harga Modal" type="number" value={form.cost} onChange={e => setForm({...form, cost: e.target.value})} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Stok" type="number" value={form.stock} onChange={e => setForm({...form, stock: e.target.value})} />
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Kategori</label>
+              <select value={form.category} onChange={e => setForm({...form, category: e.target.value})}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm dark:text-white outline-none">
+                {['Sembako', 'Makanan', 'Minuman', 'Kebutuhan', 'Lainnya'].map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <Input label="Tanggal Kadaluarsa (opsional)" type="date" value={form.expiry} onChange={e => setForm({...form, expiry: e.target.value})} />
+          <div className="flex gap-2 pt-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>Batal</Button>
+            <Button variant="primary" className="flex-1" onClick={handleSubmit}>{editing ? 'Simpan' : 'Tambah'}</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+};
+
+// ==================== HISTORY SCREEN ====================
+const HistoryScreen = ({ transactions, receipt, settings }) => {
+  const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedTx, setSelectedTx] = useState(null);
+  const [showReceipt, setShowReceipt] = useState(false);
+
+  const filtered = transactions.filter(tx => {
+    const matchSearch = tx.items.some(i => i.name.toLowerCase().includes(search.toLowerCase()));
+    const d = new Date(tx.date);
+    const matchFrom = !dateFrom || d >= new Date(dateFrom);
+    const matchTo = !dateTo || d <= new Date(dateTo + 'T23:59:59');
+    return matchSearch && matchFrom && matchTo;
+  }).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const exportCSV = () => {
+    const headers = ['Tanggal,No Transaksi,Kasir,Item,Subtotal,Diskon,PPN,Total,Metode Bayar'];
+    const rows = filtered.map(tx => {
+      const items = tx.items.map(i => `${i.name}(${i.qty})`).join('; ');
+      return `"${new Date(tx.date).toLocaleString('id-ID')}","${tx.id.slice(-8)}","${tx.cashier}","${items}",${tx.subtotal},${tx.discount},${tx.tax},${tx.total},"${tx.paymentMethod}"`;
+    });
+    const csv = [headers, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `transaksi_${today()}.csv`; a.click();
+  };
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="px-4 pt-4 pb-2">
+        <div className="flex gap-2 mb-3">
+          <div className="relative flex-1">
+            <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input type="text" placeholder="Cari item..." value={search} onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-800 rounded-xl text-sm border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-primary-500 outline-none dark:text-white" />
+          </div>
+          <Button variant="outline" onClick={exportCSV} icon={<Icon name="download" size={16} />}>CSV</Button>
+        </div>
+        <div className="flex gap-2">
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm dark:text-white outline-none" />
+          <span className="self-center text-slate-400">-</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm dark:text-white outline-none" />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <div className="space-y-2">
+          {filtered.map(tx => (
+            <Card key={tx.id} className="p-3" onClick={() => { setSelectedTx(tx); setShowReceipt(true); }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-sm text-slate-800 dark:text-white">#{tx.id.slice(-8).toUpperCase()}</div>
+                  <div className="text-xs text-slate-500">{new Date(tx.date).toLocaleString('id-ID')} · {tx.cashier}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">{tx.items.length} item · {tx.paymentMethod}</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-sm text-slate-800 dark:text-white">{fmt(tx.total)}</div>
+                  <div className="text-[10px] text-emerald-600">Lihat Struk →</div>
+                </div>
+              </div>
+            </Card>
+          ))}
+          {filtered.length === 0 && (
+            <div className="text-center py-12 text-slate-400">
+              <Icon name="receipt" size={40} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Belum ada transaksi</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <Modal isOpen={showReceipt} onClose={() => setShowReceipt(false)} title="Detail Struk" size="md">
+        {selectedTx && (
+          <div className="space-y-4">
+            <ReceiptPreview receipt={receipt} transaction={selectedTx} settings={settings} />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => window.print()} icon={<Icon name="print" size={14} />}>Print</Button>
+              <Button variant="secondary" className="flex-1" onClick={() => setShowReceipt(false)}>Tutup</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+// ==================== REPORTS SCREEN ====================
+const ReportsScreen = ({ transactions, products }) => {
+  const [period, setPeriod] = useState('today');
+
+  const now = new Date();
+  const periods = {
+    today: { label: 'Hari Ini', from: new Date(now.getFullYear(), now.getMonth(), now.getDate()) },
+    week: { label: '7 Hari', from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) },
+    month: { label: '30 Hari', from: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) },
+    all: { label: 'Semua', from: new Date(0) },
+  };
+
+  const filtered = transactions.filter(tx => new Date(tx.date) >= periods[period].from);
+
+  const totalRevenue = filtered.reduce((s, t) => s + t.total, 0);
+  const totalProfit = filtered.reduce((s, t) => s + t.items.reduce((is, i) => is + (i.price - (i.cost || 0)) * i.qty, 0), 0);
+  const totalTransactions = filtered.length;
+  const avgOrder = totalTransactions > 0 ? Math.round(totalRevenue / totalTransactions) : 0;
+
+  const productSales = {};
+  filtered.forEach(tx => {
+    tx.items.forEach(i => {
+      productSales[i.name] = (productSales[i.name] || 0) + i.qty;
+    });
+  });
+  const topProducts = Object.entries(productSales).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  const dailyData = {};
+  filtered.forEach(tx => {
+    const d = new Date(tx.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+    dailyData[d] = (dailyData[d] || 0) + tx.total;
+  });
+  const dailyLabels = Object.keys(dailyData).slice(-7);
+  const dailyValues = dailyLabels.map(d => dailyData[d]);
+  const maxVal = Math.max(...dailyValues, 1);
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="px-4 pt-4 pb-2">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
+          {Object.entries(periods).map(([key, p]) => (
+            <button key={key} onClick={() => setPeriod(key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                period === key ? 'bg-primary-500 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+              }`}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <Card className="p-4">
+            <div className="text-xs text-slate-500 mb-1">Total Penjualan</div>
+            <div className="text-xl font-bold text-slate-800 dark:text-white">{fmt(totalRevenue)}</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs text-slate-500 mb-1">Estimasi Profit</div>
+            <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{fmt(totalProfit)}</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs text-slate-500 mb-1">Jumlah Transaksi</div>
+            <div className="text-xl font-bold text-slate-800 dark:text-white">{totalTransactions}</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs text-slate-500 mb-1">Rata-rata Order</div>
+            <div className="text-xl font-bold text-slate-800 dark:text-white">{fmt(avgOrder)}</div>
+          </Card>
+        </div>
+
+        {dailyLabels.length > 0 && (
+          <Card className="p-4 mb-4">
+            <h3 className="font-semibold text-sm text-slate-800 dark:text-white mb-3">Grafik Penjualan</h3>
+            <div className="flex items-end gap-2 h-32">
+              {dailyLabels.map((label, i) => (
+                <div key={label} className="flex-1 flex flex-col items-center gap-1">
+                  <div className="w-full bg-primary-200 dark:bg-primary-900/30 rounded-t-lg relative" style={{ height: `${(dailyValues[i] / maxVal) * 100}%`, minHeight: '4px' }}>
+                    <div className="absolute bottom-0 left-0 right-0 bg-primary-500 rounded-t-lg" style={{ height: '100%' }}></div>
+                  </div>
+                  <span className="text-[9px] text-slate-500 rotate-0">{label}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        <Card className="p-4 mb-4">
+          <h3 className="font-semibold text-sm text-slate-800 dark:text-white mb-3">Produk Terlaris</h3>
+          <div className="space-y-2">
+            {topProducts.map(([name, qty], i) => (
+              <div key={name} className="flex items-center gap-3">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                  i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-200 text-slate-600' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'
+                }`}>{i + 1}</div>
+                <div className="flex-1 text-sm text-slate-700 dark:text-slate-300">{name}</div>
+                <div className="text-sm font-bold text-slate-800 dark:text-white">{qty}x</div>
+              </div>
+            ))}
+            {topProducts.length === 0 && <div className="text-sm text-slate-400 text-center py-4">Belum ada data</div>}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+// ==================== SETTINGS SCREEN ====================
+const SettingsScreen = ({ settings, setSettings, receipt, setReceipt, products, setProducts, transactions, setTransactions, onOpenReceiptEditor }) => {
+  const [toast, setToast] = useState(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const backupData = () => {
+    const data = { products, transactions, receipt, settings, exportDate: now() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `akuratama_backup_${today()}.json`; a.click();
+    setToast({ message: 'Backup berhasil diunduh', type: 'success' });
+  };
+
+  const restoreData = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (data.products) setProducts(data.products);
+        if (data.transactions) setTransactions(data.transactions);
+        if (data.receipt) { setReceipt(data.receipt); LS.set(STORAGE_KEYS.receipt, data.receipt); }
+        if (data.settings) { setSettings(data.settings); LS.set(STORAGE_KEYS.settings, data.settings); }
+        setToast({ message: 'Data berhasil dipulihkan', type: 'success' });
+      } catch {
+        setToast({ message: 'File backup tidak valid', type: 'error' });
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const resetAll = () => {
+    Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
+    setProducts([...SAMPLE_PRODUCTS]);
+    setTransactions([]);
+    setReceipt({ ...DEFAULT_RECEIPT });
+    setSettings({ ...DEFAULT_SETTINGS });
+    setShowResetConfirm(false);
+    setToast({ message: 'Semua data direset', type: 'info' });
+  };
+
+  return (
+    <div className="h-full overflow-y-auto">
+      {toast && <Toast {...toast} onClose={() => setToast(null)} />}
+
+      <div className="px-4 pt-4 pb-8 space-y-4">
+        {/* Logo Banner */}
+        <div className="bg-brand-900 rounded-2xl p-6 text-center">
+          <div className="flex justify-center mb-3">
+            <LogoSVG size={56} showText={false} />
+          </div>
+          <h2 className="text-white font-extrabold text-xl tracking-wider">AKURATAMA</h2>
+          <p className="text-brand-300 text-xs mt-1">Solusi Stok Opname & POS Terpercaya</p>
+        </div>
+
+        <Card className="p-4">
+          <h3 className="font-semibold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+            <Icon name="settings" size={16} className="text-primary-500" /> Pengaturan Umum
+          </h3>
+          <div className="space-y-3">
+            <Input label="Nama Kasir Default" value={settings.cashierName} 
+              onChange={e => { const s = {...settings, cashierName: e.target.value}; setSettings(s); LS.set(STORAGE_KEYS.settings, s); }} />
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">PPN (%)</label>
+              <div className="flex items-center gap-2">
+                <input type="range" min="0" max="20" value={settings.taxRate} 
+                  onChange={e => { const s = {...settings, taxRate: parseInt(e.target.value)}; setSettings(s); LS.set(STORAGE_KEYS.settings, s); }}
+                  className="flex-1" />
+                <span className="text-sm font-bold w-10 text-right">{settings.taxRate}%</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <h3 className="font-semibold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+            <Icon name="receipt" size={16} className="text-primary-500" /> Tampilan Struk
+          </h3>
+          <p className="text-xs text-slate-500 mb-3">Kustomisasi logo, footer, font, dan elemen struk</p>
+          <Button variant="brand" onClick={onOpenReceiptEditor} icon={<Icon name="edit" size={16} />} className="w-full">
+            Buka Editor Struk
+          </Button>
+        </Card>
+
+        <Card className="p-4">
+          <h3 className="font-semibold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+            <Icon name="save" size={16} className="text-emerald-500" /> Backup & Restore
+          </h3>
+          <div className="space-y-2">
+            <Button variant="secondary" onClick={backupData} icon={<Icon name="download" size={16} />} className="w-full">
+              Download Backup (JSON)
+            </Button>
+            <label className="block">
+              <input type="file" accept=".json" onChange={restoreData} className="hidden" />
+              <div className="w-full px-3 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg text-sm font-medium text-center cursor-pointer transition-colors flex items-center justify-center gap-1.5">
+                <Icon name="upload" size={16} /> Restore dari File
+              </div>
+            </label>
+          </div>
+        </Card>
+
+        <Card className="p-4 border-rose-200 dark:border-rose-800">
+          <h3 className="font-semibold text-rose-700 dark:text-rose-400 mb-3 flex items-center gap-2">
+            <Icon name="alert" size={16} /> Zona Berbahaya
+          </h3>
+          <Button variant="danger" onClick={() => setShowResetConfirm(true)} icon={<Icon name="trash" size={16} />} className="w-full">
+            Reset Semua Data
+          </Button>
+        </Card>
+      </div>
+
+      <Modal isOpen={showResetConfirm} onClose={() => setShowResetConfirm(false)} title="Konfirmasi Reset" size="sm">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center mx-auto">
+            <Icon name="alert" size={24} className="text-rose-500" />
+          </div>
+          <div>
+            <p className="text-sm text-slate-600 dark:text-slate-300">Semua data produk, transaksi, dan pengaturan akan dihapus permanen.</p>
+            <p className="text-xs text-slate-400 mt-1">Tindakan ini tidak dapat dibatalkan.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setShowResetConfirm(false)}>Batal</Button>
+            <Button variant="danger" className="flex-1" onClick={resetAll}>Ya, Reset</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+};
+
+// ==================== MAIN APP ====================
+const App = () => {
+  const [darkMode, setDarkMode] = useState(() => LS.get(STORAGE_KEYS.darkMode, false));
+  const [activeTab, setActiveTab] = useState('kasir');
+  const [showReceiptEditor, setShowReceiptEditor] = useState(false);
+  const [lastTransaction, setLastTransaction] = useState(null);
+  const [showLastReceipt, setShowLastReceipt] = useState(false);
+
+  const [products, setProducts] = useState(() => LS.get(STORAGE_KEYS.products, [...SAMPLE_PRODUCTS]));
+  const [transactions, setTransactions] = useState(() => LS.get(STORAGE_KEYS.transactions, []));
+  const [receipt, setReceipt] = useState(() => LS.get(STORAGE_KEYS.receipt, { ...DEFAULT_RECEIPT }));
+  const [settings, setSettings] = useState(() => LS.get(STORAGE_KEYS.settings, { ...DEFAULT_SETTINGS }));
+  const [cart, setCart] = useState(() => LS.get(STORAGE_KEYS.cart, []));
+  const [heldOrders, setHeldOrders] = useState(() => LS.get(STORAGE_KEYS.heldOrders, []));
+
+  useEffect(() => { LS.set(STORAGE_KEYS.products, products); }, [products]);
+  useEffect(() => { LS.set(STORAGE_KEYS.transactions, transactions); }, [transactions]);
+  useEffect(() => { LS.set(STORAGE_KEYS.receipt, receipt); }, [receipt]);
+  useEffect(() => { LS.set(STORAGE_KEYS.settings, settings); }, [settings]);
+  useEffect(() => { LS.set(STORAGE_KEYS.cart, cart); }, [cart]);
+  useEffect(() => { LS.set(STORAGE_KEYS.heldOrders, heldOrders); }, [heldOrders]);
+  useEffect(() => { 
+    LS.set(STORAGE_KEYS.darkMode, darkMode);
+    if (darkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [darkMode]);
+
+  const handleCheckout = (tx) => {
+    setTransactions(prev => [tx, ...prev]);
+    setLastTransaction(tx);
+    setShowLastReceipt(true);
+    setProducts(prev => prev.map(p => {
+      const item = tx.items.find(i => i.id === p.id);
+      if (item) return { ...p, stock: Math.max(0, p.stock - item.qty) };
+      return p;
+    }));
+  };
+
+  const tabs = [
+    { id: 'kasir', label: 'Kasir', icon: 'cart' },
+    { id: 'produk', label: 'Produk', icon: 'box' },
+    { id: 'riwayat', label: 'Riwayat', icon: 'receipt' },
+    { id: 'laporan', label: 'Laporan', icon: 'chart' },
+    { id: 'pengaturan', label: 'Pengaturan', icon: 'settings' },
+  ];
+
+  if (showReceiptEditor) {
+    return (
+      <ReceiptEditor 
+        receipt={receipt} 
+        setReceipt={setReceipt} 
+        onClose={() => setShowReceiptEditor(false)}
+        onSave={() => {}}
+        settings={settings}
+      />
+    );
+  }
+
+  return (
+    <div className="h-screen flex flex-col bg-slate-100 dark:bg-slate-900">
+      {/* Header with New Logo */}
+      <header className="bg-brand-900 border-b border-brand-800 px-4 py-3 flex items-center justify-between shrink-0">
+        <LogoSVG size={36} showText={true} showTagline={false} dark={true} />
+        <div className="flex items-center gap-1">
+          {heldOrders.length > 0 && (
+            <button className="p-2 rounded-lg hover:bg-brand-800 text-amber-400 relative">
+              <Icon name="pause" size={18} />
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-amber-500 text-white text-[9px] rounded-full flex items-center justify-center font-bold">{heldOrders.length}</span>
+            </button>
+          )}
+          <button onClick={() => setDarkMode(!darkMode)} className="p-2 rounded-lg hover:bg-brand-800 text-brand-300 transition-colors">
+            <Icon name={darkMode ? 'sun' : 'moon'} size={18} />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-hidden">
+        {activeTab === 'kasir' && (
+          <CashierScreen 
+            products={products} cart={cart} setCart={setCart}
+            heldOrders={heldOrders} setHeldOrders={setHeldOrders}
+            receipt={receipt} settings={settings}
+            onCheckout={handleCheckout} onOpenReceiptEditor={() => setShowReceiptEditor(true)}
+          />
+        )}
+        {activeTab === 'produk' && <ProductManager products={products} setProducts={setProducts} />}
+        {activeTab === 'riwayat' && <HistoryScreen transactions={transactions} receipt={receipt} settings={settings} />}
+        {activeTab === 'laporan' && <ReportsScreen transactions={transactions} products={products} />}
+        {activeTab === 'pengaturan' && (
+          <SettingsScreen 
+            settings={settings} setSettings={setSettings}
+            receipt={receipt} setReceipt={setReceipt}
+            products={products} setProducts={setProducts}
+            transactions={transactions} setTransactions={setTransactions}
+            onOpenReceiptEditor={() => setShowReceiptEditor(true)}
+          />
+        )}
+      </main>
+
+      {/* Last Receipt Modal */}
+      <Modal isOpen={showLastReceipt} onClose={() => setShowLastReceipt(false)} title="Transaksi Berhasil" size="md">
+        {lastTransaction && (
+          <div className="space-y-4">
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 text-center">
+              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-800 rounded-full flex items-center justify-center mx-auto mb-2">
+                <Icon name="check" size={24} className="text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div className="text-sm text-emerald-600 dark:text-emerald-400">Pembayaran Sukses</div>
+              <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{fmt(lastTransaction.total)}</div>
+              <div className="text-xs text-emerald-500 mt-1">Kembalian: {fmt(lastTransaction.change)}</div>
+            </div>
+            <ReceiptPreview receipt={receipt} transaction={lastTransaction} settings={settings} />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => window.print()} icon={<Icon name="print" size={14} />}>Print Struk</Button>
+              <Button variant="primary" className="flex-1" onClick={() => setShowLastReceipt(false)}>Selesai</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Bottom Nav */}
+      <nav className="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 shrink-0">
+        <div className="flex justify-around items-center py-1">
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)}
+              className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-colors ${
+                activeTab === t.id 
+                  ? 'text-primary-600 dark:text-primary-400' 
+                  : 'text-slate-400 dark:text-slate-500'
+              }`}>
+              <Icon name={t.icon} size={20} />
+              <span className="text-[10px] font-medium">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+    </div>
+  );
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
